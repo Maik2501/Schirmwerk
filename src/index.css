@@ -1,0 +1,52 @@
+@import 'tailwindcss';
+
+/*
+ * Designsystem „Schirmwerk“ – warme, blaufreie Studio-Palette.
+ * Der leuchtende Schirm ist der Held, das UI bleibt Kohle & Rauch.
+ */
+@theme {
+  --color-kohle: #171310; /* Seitenhintergrund, warmes Schwarz */
+  --color-rauch: #221e1a; /* Panelflächen */
+  --color-porzellan: #ede6db; /* Primärtext */
+  --color-asche: #8e8577; /* Sekundärtext, Beschriftungen */
+  --color-bernstein: #f2a65a; /* Akzent: aktive Regler, Fokus, Glühlicht */
+  --color-signal: #e2594a; /* ausschließlich Druckbarkeits-Warnungen */
+
+  --font-sans: 'Space Grotesk Variable', 'Space Grotesk', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', monospace;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--color-kohle);
+  color: var(--color-porzellan);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* sichtbarer Tastaturfokus in Akzentfarbe */
+:focus-visible {
+  outline: 2px solid var(--color-bernstein);
+  outline-offset: 2px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-bernstein) 35%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
