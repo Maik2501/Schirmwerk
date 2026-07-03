@@ -18,6 +18,17 @@ Tailwind v4 (Tokens in `src/index.css` unter `@theme`), Vitest.
 
 - `npm run dev` (Port 5173, strictPort), `npm test`, `npm run build`
 
+## Backlog (nach MVP, gemeinsam priorisieren)
+
+- **Nachttischlampen-Variante** (Nutzerwunsch 03.07.2026): stehender Schirm
+  bzw. Fassung unten – Druck- und Nutzungsorientierung entkoppeln,
+  Hals-Position als Parameter (oben/unten)
+- Layerlinien-Optik als prozedurale Normal-Map in der Vorschau
+- MeshTransmissionMaterial als schaltbare „Schön“-Vorschau
+- Editierbare Bezier-Profilkurve (der „Riss“ wird Editor), weitere
+  Wellenformen (Dreieck, Sägezahn, Superformula), 3MF-Export,
+  Druckzeit-/Materialschätzung, Galerie-/Turntable-Ansicht
+
 ## Domänen-Konventionen
 
 - Längen in mm, z = Höhenachse (0 = Druckbett), STL Z-oben

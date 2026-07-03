@@ -27,6 +27,7 @@ const prefersReducedMotion =
 
 export function Bulb() {
   const bulbOn = useStudio((s) => s.bulbOn)
+  const brightness = useStudio((s) => s.bulbBrightness)
   const params = useStudio((s) => s.params)
 
   const lightRef = useRef<THREE.PointLight>(null)
@@ -36,7 +37,8 @@ export function Bulb() {
   const level = useRef(0)
 
   useFrame((_, dt) => {
-    const target = bulbOn ? 1 : 0
+    // Dimmer skaliert das Ziel; das Anglühen lerpt weiterhin weich dorthin
+    const target = bulbOn ? brightness : 0
     const speed = prefersReducedMotion ? Infinity : 2.6
     const k = speed === Infinity ? 1 : 1 - Math.exp(-dt * speed)
     level.current += (target - level.current) * k
