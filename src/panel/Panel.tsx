@@ -14,6 +14,7 @@ import { PETG_TRANSLUCENT } from '../state/filaments'
 import { useStudio } from '../state/store'
 import { downloadModel, modelFileName, type ExportFormat } from './exportStl'
 import { Group } from './Group'
+import { Library } from './Library'
 import { Riss } from './Riss'
 import { SliderInput } from './SliderInput'
 
@@ -565,6 +566,10 @@ export function Panel() {
             step={50}
             onChange={(v) => setExportRes({ zSegments: Math.round(v) })}
           />
+        </Group>
+
+        <Group title="Bibliothek" defaultOpen={false}>
+          <Library />
         </Group>
       </div>
     </div>

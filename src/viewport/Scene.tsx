@@ -26,6 +26,7 @@ export function Scene() {
   const neckPosition = useStudio((s) => s.params.neckPosition)
   const H = useStudio((s) => s.params.heightMm)
   const neck = useStudio((s) => s.params.neck)
+  const turntable = useStudio((s) => s.turntable)
 
   const standing = mounting === 'stehend'
   // kopfüber gedruckt → für die Nutzung um 180° drehen (Rx(+90°) mappt
@@ -70,6 +71,8 @@ export function Scene() {
         <OrbitControls
           makeDefault
           enableDamping
+          autoRotate={turntable}
+          autoRotateSpeed={1.2}
           target={target}
           minDistance={140}
           maxDistance={900}

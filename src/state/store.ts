@@ -8,6 +8,7 @@ import type { NeckParams, ProfileMode, ProfileParams, Resolution, ShadeParams, W
 import { defaultShadeParams, EXPORT_RESOLUTION, PREVIEW_RESOLUTION } from '../geometry/defaults'
 import { seedBezierFromProfile, seedSplineFromProfile } from '../geometry/profile'
 import { PETG_TRANSLUCENT, type FilamentColor } from './filaments'
+import type { ShareDesign } from './designs'
 
 /** Nutzungs-Aufbau: hängende Pendelleuchte oder stehende Nachttischlampe */
 export type Mounting = 'haengend' | 'stehend'
@@ -28,6 +29,8 @@ interface StudioState {
   layerLines: boolean
   /** „Glas-Vorschau“: MeshTransmissionMaterial mit echter Brechung (GPU-lastig) */
   glassPreview: boolean
+  /** Drehteller: Kamera rotiert automatisch ums Modell */
+  turntable: boolean
 
   setParams: (patch: Partial<ShadeParams>) => void
   setProfile: (patch: Partial<ProfileParams>) => void
@@ -42,6 +45,9 @@ interface StudioState {
   setMounting: (mounting: Mounting) => void
   toggleLayerLines: () => void
   toggleGlassPreview: () => void
+  toggleTurntable: () => void
+  /** Komplettes Design anwenden (Bibliothek/Share-URL) */
+  applyDesign: (design: ShareDesign) => void
 }
 
 export const useStudio = create<StudioState>()((set) => ({
@@ -54,6 +60,7 @@ export const useStudio = create<StudioState>()((set) => ({
   mounting: 'haengend',
   layerLines: true,
   glassPreview: false,
+  turntable: false,
 
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
   setProfile: (patch) =>
@@ -87,4 +94,12 @@ export const useStudio = create<StudioState>()((set) => ({
     })),
   toggleLayerLines: () => set((s) => ({ layerLines: !s.layerLines })),
   toggleGlassPreview: () => set((s) => ({ glassPreview: !s.glassPreview })),
+  toggleTurntable: () => set((s) => ({ turntable: !s.turntable })),
+  applyDesign: (design) =>
+    set(() => ({
+      params: design.params,
+      shadeColor:
+        PETG_TRANSLUCENT.find((f) => f.id === design.shadeColorId) ?? PETG_TRANSLUCENT[0],
+      mounting: design.mounting,
+    })),
 }))

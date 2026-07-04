@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Scene } from './viewport/Scene'
 import { Panel } from './panel/Panel'
+import { decodeShare } from './state/designs'
 import { useStudio } from './state/store'
 
 /**
@@ -9,6 +10,15 @@ import { useStudio } from './state/store'
  */
 export default function App() {
   const [panelOpen, setPanelOpen] = useState(false)
+
+  // Share-URL (#d=…) beim Start anwenden – der Hash bleibt stehen,
+  // damit der Link weitergegeben werden kann
+  useEffect(() => {
+    const match = location.hash.match(/^#d=(.+)$/)
+    if (!match) return
+    const shared = decodeShare(match[1])
+    if (shared) useStudio.getState().applyDesign(shared)
+  }, [])
 
   return (
     <div className="flex h-dvh flex-col bg-kohle text-porzellan">
@@ -38,6 +48,9 @@ export default function App() {
           <p className="pointer-events-none absolute bottom-3 left-5 hidden font-mono text-[11px] text-asche/70 sm:block">
             Ziehen: drehen · Scrollen: zoomen · Rechte Maustaste: verschieben
           </p>
+
+          {/* Drehteller (Desktop; mobil sitzt dort der Parameter-Button) */}
+          <TurntableButton />
 
           {/* Panel-Aufklapper für schmale Screens */}
           <button
@@ -83,6 +96,29 @@ export default function App() {
         </aside>
       </div>
     </div>
+  )
+}
+
+function TurntableButton() {
+  const turntable = useStudio((s) => s.turntable)
+  const toggleTurntable = useStudio((s) => s.toggleTurntable)
+  return (
+    <button
+      type="button"
+      aria-pressed={turntable}
+      onClick={toggleTurntable}
+      className={
+        'absolute right-4 bottom-4 hidden items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs transition-colors lg:flex ' +
+        (turntable
+          ? 'border-bernstein/50 bg-rauch text-bernstein'
+          : 'border-white/10 bg-rauch text-asche hover:border-white/20 hover:text-porzellan')
+      }
+    >
+      <span aria-hidden className={turntable ? 'animate-spin [animation-duration:3s]' : ''}>
+        ↻
+      </span>
+      Drehteller
+    </button>
   )
 }
 
