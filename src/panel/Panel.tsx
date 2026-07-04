@@ -4,9 +4,13 @@
  * beschriftet (Durchmesser statt Radius, Prozent statt Faktor) –
  * die Umrechnung in die Geometrie-Parameter passiert genau hier.
  */
+import { useMemo, useState } from 'react'
 import { SOCKETS } from '../geometry/sockets'
+import { sampleMinRadius } from '../geometry/surface'
+import { stlByteLength } from '../geometry/stl'
 import type { ProfileMode, ProfilePreset, SocketType } from '../geometry/types'
 import { useStudio } from '../state/store'
+import { downloadStl, stlFileName } from './exportStl'
 import { Group } from './Group'
 import { Riss } from './Riss'
 import { SliderInput } from './SliderInput'
@@ -40,6 +44,30 @@ export function Panel() {
   const editing = profile.mode !== 'preset'
   // Bauch-Regler wirkt nur auf Presets mit Formanteil
   const shapeless = editing || profile.preset === 'zylinder' || profile.preset === 'konus'
+
+  // --- STL-Export ---------------------------------------------------------
+  const [exportBusy, setExportBusy] = useState(false)
+  // Selbstschnitt-Wächter: r ≤ 0 ⇒ Polarkontur schneidet sich, Export sperren.
+  // 128² Proben reichen (n2 ≤ 48 ⇒ über Nyquist) und bleiben beim Reglerziehen flüssig.
+  const selfIntersecting = useMemo(
+    () => sampleMinRadius(params, { thetaSegments: 128, zSegments: 128 }) <= 0,
+    [params],
+  )
+  const exportTris = 2 * exportRes.thetaSegments * exportRes.zSegments + 2 * exportRes.thetaSegments
+  const exportMb = stlByteLength(exportTris) / 1_048_576
+
+  const handleExport = () => {
+    if (exportBusy || selfIntersecting) return
+    setExportBusy(true)
+    // erst den Busy-Zustand rendern lassen, dann synchron rechnen
+    setTimeout(() => {
+      try {
+        downloadStl(params, exportRes)
+      } finally {
+        setExportBusy(false)
+      }
+    }, 30)
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -252,9 +280,33 @@ export function Panel() {
 
         <Group title="Export" defaultOpen={false}>
           <p className="text-[11px] leading-relaxed text-asche">
-            Vorschau- und Export-Auflösung sind getrennt – der STL-Export
-            (nächstes Feature) rechnet immer mit der Export-Auflösung.
+            Das STL kommt absichtlich als gefüllter Solid – erst der
+            Vase-Modus des Slicers macht daraus die einwandige Spirale.
+            Bambu Studio: Prozess → Sonstiges → <em className="text-porzellan/80 not-italic">Spiralvase</em>{' '}
+            aktivieren, dann Stärke → <em className="text-porzellan/80 not-italic">Boden-Schalenschichten = 0</em>{' '}
+            (öffnet die Unterseite; oben endet die Spirale von selbst offen).
           </p>
+          <div>
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exportBusy || selfIntersecting}
+              className="w-full rounded-md border border-bernstein/40 bg-bernstein/10 px-3 py-2 text-sm text-bernstein transition-colors hover:bg-bernstein/20 disabled:pointer-events-none disabled:opacity-40"
+            >
+              {exportBusy ? 'Rechne …' : 'STL exportieren'}
+            </button>
+            {selfIntersecting ? (
+              <p className="mt-1.5 text-[11px] leading-relaxed text-signal">
+                Export gesperrt: Radius fällt auf ≤ 0 mm, die Form schneidet
+                sich selbst. Wellentiefe verringern oder Profil anpassen.
+              </p>
+            ) : (
+              <p className="mt-1.5 font-mono text-[10px] text-asche">
+                {stlFileName(params)} · {exportTris.toLocaleString('de-DE')} Dreiecke ·{' '}
+                {exportMb.toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB
+              </p>
+            )}
+          </div>
           <SliderInput
             label="Vorschau: Segmente Umfang"
             value={previewRes.thetaSegments}
