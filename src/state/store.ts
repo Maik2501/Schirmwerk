@@ -7,6 +7,7 @@ import { create } from 'zustand'
 import type { NeckParams, ProfileMode, ProfileParams, Resolution, ShadeParams, WaveParams } from '../geometry/types'
 import { defaultShadeParams, EXPORT_RESOLUTION, PREVIEW_RESOLUTION } from '../geometry/defaults'
 import { seedBezierFromProfile, seedSplineFromProfile } from '../geometry/profile'
+import { PETG_TRANSLUCENT, type FilamentColor } from './filaments'
 
 interface StudioState {
   params: ShadeParams
@@ -16,6 +17,8 @@ interface StudioState {
   bulbOn: boolean
   /** Dimmer der Glühbirne, 0.1–1 */
   bulbBrightness: number
+  /** Filament-Farbe der Vorschau (Bambu PETG Translucent), rein visuell */
+  shadeColor: FilamentColor
 
   setParams: (patch: Partial<ShadeParams>) => void
   setProfile: (patch: Partial<ProfileParams>) => void
@@ -26,6 +29,7 @@ interface StudioState {
   setExportRes: (patch: Partial<Resolution>) => void
   toggleBulb: () => void
   setBulbBrightness: (value: number) => void
+  setShadeColor: (color: FilamentColor) => void
 }
 
 export const useStudio = create<StudioState>()((set) => ({
@@ -34,6 +38,7 @@ export const useStudio = create<StudioState>()((set) => ({
   exportRes: EXPORT_RESOLUTION,
   bulbOn: true,
   bulbBrightness: 1,
+  shadeColor: PETG_TRANSLUCENT[0],
 
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
   setProfile: (patch) =>
@@ -57,4 +62,5 @@ export const useStudio = create<StudioState>()((set) => ({
   setExportRes: (patch) => set((s) => ({ exportRes: { ...s.exportRes, ...patch } })),
   toggleBulb: () => set((s) => ({ bulbOn: !s.bulbOn })),
   setBulbBrightness: (value) => set({ bulbBrightness: Math.min(1, Math.max(0.1, value)) }),
+  setShadeColor: (color) => set({ shadeColor: color }),
 }))

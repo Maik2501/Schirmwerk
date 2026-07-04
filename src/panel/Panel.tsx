@@ -9,6 +9,7 @@ import { SOCKETS } from '../geometry/sockets'
 import { sampleMinRadius } from '../geometry/surface'
 import { stlByteLength } from '../geometry/stl'
 import type { ProfileMode, ProfilePreset, SocketType } from '../geometry/types'
+import { PETG_TRANSLUCENT } from '../state/filaments'
 import { useStudio } from '../state/store'
 import { downloadStl, stlFileName } from './exportStl'
 import { Group } from './Group'
@@ -37,7 +38,8 @@ export function Panel() {
   const params = useStudio((s) => s.params)
   const previewRes = useStudio((s) => s.previewRes)
   const exportRes = useStudio((s) => s.exportRes)
-  const { setParams, setProfile, setProfileMode, setWaves, setNeck, setPreviewRes, setExportRes } =
+  const shadeColor = useStudio((s) => s.shadeColor)
+  const { setParams, setProfile, setProfileMode, setWaves, setNeck, setPreviewRes, setExportRes, setShadeColor } =
     useStudio()
 
   const { profile, waves, neck } = params
@@ -276,6 +278,43 @@ export function Panel() {
             unit="mm"
             onChange={(v) => setNeck({ blendMm: v })}
           />
+        </Group>
+
+        <Group title="Material">
+          <div>
+            <span className="mb-1.5 block text-xs text-asche">
+              Farbe (Bambu PETG Translucent)
+            </span>
+            <div className="flex flex-wrap gap-1.5">
+              {PETG_TRANSLUCENT.map((f) => (
+                <button
+                  key={f.id}
+                  type="button"
+                  aria-label={f.name}
+                  aria-pressed={shadeColor.id === f.id}
+                  title={f.name}
+                  onClick={() => setShadeColor(f)}
+                  className={
+                    'size-7 rounded-full border transition-transform ' +
+                    (shadeColor.id === f.id
+                      ? 'scale-110 border-bernstein ring-2 ring-bernstein/35'
+                      : 'border-white/15 hover:scale-105 hover:border-white/40')
+                  }
+                  style={{
+                    // „Klar“ bekommt einen Glas-Verlauf statt Vollton
+                    background:
+                      f.id === 'clear'
+                        ? 'linear-gradient(135deg, rgba(255,255,255,0.85), rgba(255,255,255,0.15))'
+                        : f.hex,
+                  }}
+                />
+              ))}
+            </div>
+            <p className="mt-1.5 font-mono text-[10px] text-asche">
+              {shadeColor.name}
+              {shadeColor.id !== 'clear' && ` · ${shadeColor.hex.toUpperCase()}`}
+            </p>
+          </div>
         </Group>
 
         <Group title="Export" defaultOpen={false}>

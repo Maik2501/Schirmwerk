@@ -11,6 +11,7 @@ import { useStudio } from '../state/store'
 export function ShadeMesh() {
   const params = useStudio((s) => s.params)
   const res = useStudio((s) => s.previewRes)
+  const shadeColor = useStudio((s) => s.shadeColor)
 
   const geometry = useMemo(() => {
     const data = buildShadeMesh(params, res, { caps: false })
@@ -31,9 +32,13 @@ export function ShadeMesh() {
         das Material bricht/streut, was dahinter liegt (auch die Glühbirne).
         Die leichte Rauheit simuliert die matte Schichttextur des Drucks.
         ior 1.57 ≈ PET. Feintuning am lebenden Objekt beim Checkpoint.
+
+        color = Bambu-Filament-Hex (PETG Translucent): tönt Albedo UND
+        Transmission – die Birne scheint also eingefärbt durch, genau wie
+        beim gefärbten Filament. Weiß („Klar“) tönt nicht = Studio-Optik.
       */}
       <meshPhysicalMaterial
-        color="#ffffff"
+        color={shadeColor.hex}
         metalness={0}
         roughness={0.38}
         transmission={1}
