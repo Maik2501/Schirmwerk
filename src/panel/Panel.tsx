@@ -5,13 +5,14 @@
  * die Umrechnung in die Geometrie-Parameter passiert genau hier.
  */
 import { useMemo, useState } from 'react'
+import { estimateVasePrint } from '../geometry/printEstimate'
 import { SOCKETS } from '../geometry/sockets'
 import { sampleMinRadius } from '../geometry/surface'
 import { stlByteLength } from '../geometry/stl'
-import type { ProfileMode, ProfilePreset, SocketType, Waveform } from '../geometry/types'
+import type { ProfileMode, ProfilePreset, ShadeParams, SocketType, Waveform } from '../geometry/types'
 import { PETG_TRANSLUCENT } from '../state/filaments'
 import { useStudio } from '../state/store'
-import { downloadStl, stlFileName } from './exportStl'
+import { downloadModel, modelFileName, type ExportFormat } from './exportStl'
 import { Group } from './Group'
 import { Riss } from './Riss'
 import { SliderInput } from './SliderInput'
@@ -28,6 +29,22 @@ const MOUNTINGS: { id: 'haengend' | 'stehend'; label: string }[] = [
   { id: 'haengend', label: 'Hängend (Pendel)' },
   { id: 'stehend', label: 'Stehend (Fuß)' },
 ]
+
+/**
+ * Vase-Schätzung als eigene Komponente: rechnet nur, wenn die
+ * Export-Gruppe offen ist (Group unmountet zugeklappte Inhalte).
+ */
+function PrintEstimateLine({ params }: { params: ShadeParams }) {
+  const est = useMemo(() => estimateVasePrint(params), [params])
+  const h = Math.floor(est.minutes / 60)
+  const m = Math.round(est.minutes % 60)
+  return (
+    <p className="mt-1 font-mono text-[10px] text-asche">
+      Vase-Schätzung: ≈ {est.lengthM.toFixed(0)} m Bahn · {est.grams.toFixed(0)} g PETG · ~
+      {h}:{String(m).padStart(2, '0')} h
+    </p>
+  )
+}
 
 const WAVEFORMS: { id: Waveform; label: string }[] = [
   { id: 'sinus', label: 'Sinus' },
@@ -74,8 +91,9 @@ export function Panel() {
   // Bauch-Regler wirkt nur auf Presets mit Formanteil
   const shapeless = editing || profile.preset === 'zylinder' || profile.preset === 'konus'
 
-  // --- STL-Export ---------------------------------------------------------
+  // --- Export ---------------------------------------------------------
   const [exportBusy, setExportBusy] = useState(false)
+  const [exportFormat, setExportFormat] = useState<ExportFormat>('stl')
   // Selbstschnitt-Wächter: r ≤ 0 ⇒ Polarkontur schneidet sich, Export sperren.
   // 128² Proben reichen (n2 ≤ 48 ⇒ über Nyquist) und bleiben beim Reglerziehen flüssig.
   const selfIntersecting = useMemo(
@@ -88,10 +106,10 @@ export function Panel() {
   const handleExport = () => {
     if (exportBusy || selfIntersecting) return
     setExportBusy(true)
-    // erst den Busy-Zustand rendern lassen, dann synchron rechnen
-    setTimeout(() => {
+    // erst den Busy-Zustand rendern lassen, dann rechnen
+    setTimeout(async () => {
       try {
-        downloadStl(params, exportRes)
+        await downloadModel(params, exportRes, exportFormat)
       } finally {
         setExportBusy(false)
       }
@@ -477,13 +495,29 @@ export function Panel() {
             (öffnet die Unterseite; oben endet die Spirale von selbst offen).
           </p>
           <div>
+            <div className="mb-1.5 grid grid-cols-2 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+              {(['stl', '3mf'] as const).map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  aria-pressed={exportFormat === f}
+                  onClick={() => setExportFormat(f)}
+                  className={
+                    'rounded px-1 py-1 text-[11px] uppercase transition-colors ' +
+                    (exportFormat === f ? 'bg-rauch text-bernstein' : 'text-asche hover:text-porzellan')
+                  }
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
             <button
               type="button"
               onClick={handleExport}
               disabled={exportBusy || selfIntersecting}
               className="w-full rounded-md border border-bernstein/40 bg-bernstein/10 px-3 py-2 text-sm text-bernstein transition-colors hover:bg-bernstein/20 disabled:pointer-events-none disabled:opacity-40"
             >
-              {exportBusy ? 'Rechne …' : 'STL exportieren'}
+              {exportBusy ? 'Rechne …' : `${exportFormat.toUpperCase()} exportieren`}
             </button>
             {selfIntersecting ? (
               <p className="mt-1.5 text-[11px] leading-relaxed text-signal">
@@ -492,10 +526,12 @@ export function Panel() {
               </p>
             ) : (
               <p className="mt-1.5 font-mono text-[10px] text-asche">
-                {stlFileName(params)} · {exportTris.toLocaleString('de-DE')} Dreiecke ·{' '}
-                {exportMb.toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB
+                {modelFileName(params, exportFormat)} · {exportTris.toLocaleString('de-DE')} Dreiecke
+                {exportFormat === 'stl' &&
+                  ` · ${exportMb.toLocaleString('de-DE', { maximumFractionDigits: 1 })} MB`}
               </p>
             )}
+            <PrintEstimateLine params={params} />
           </div>
           <SliderInput
             label="Vorschau: Segmente Umfang"
