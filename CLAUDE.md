@@ -20,15 +20,14 @@ Tailwind v4 (Tokens in `src/index.css` unter `@theme`), Vitest.
 
 ## Backlog (nach MVP, gemeinsam priorisieren)
 
-- **Druckbarer Fuß** für die stehende Variante (Folge von Feature 7):
-  parametrischer Sockel als zweites STL (normaler Druck) mit
-  E14/E27-Fassungsaufnahme, Kabelkanal und Auflagerand für den Kragen
 - Layerlinien-Optik als prozedurale Normal-Map in der Vorschau
 - MeshTransmissionMaterial als schaltbare „Schön“-Vorschau
 - Weitere Wellenformen (Dreieck, Sägezahn, Superformula), 3MF-Export,
   Druckzeit-/Materialschätzung, Galerie-/Turntable-Ansicht
 - Spline-Editor: Punkte per Tastatur verschiebbar machen (A11y),
   Kurven-Presets speichern/laden
+- Fuß der stehenden Variante: bewusst KEIN Druckteil – es wird ein
+  Holzsockel genutzt (Entscheidung 04.07.2026)
 
 ## Domänen-Konventionen
 

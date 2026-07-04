@@ -46,6 +46,8 @@ export function Panel() {
   const exportRes = useStudio((s) => s.exportRes)
   const shadeColor = useStudio((s) => s.shadeColor)
   const mounting = useStudio((s) => s.mounting)
+  const layerLines = useStudio((s) => s.layerLines)
+  const glassPreview = useStudio((s) => s.glassPreview)
   const {
     setParams,
     setProfile,
@@ -56,6 +58,8 @@ export function Panel() {
     setExportRes,
     setShadeColor,
     setMounting,
+    toggleLayerLines,
+    toggleGlassPreview,
   } = useStudio()
 
   const { profile, waves, neck } = params
@@ -386,6 +390,38 @@ export function Panel() {
             <p className="mt-1.5 font-mono text-[10px] text-asche">
               {shadeColor.name}
               {shadeColor.id !== 'clear' && ` · ${shadeColor.hex.toUpperCase()}`}
+              {` · ≈${Math.round(shadeColor.td * 100)} % Licht`}
+            </p>
+          </div>
+          <div>
+            <span className="mb-1.5 block text-xs text-asche">Vorschau-Optik</span>
+            <div className="grid grid-cols-2 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+              <button
+                type="button"
+                aria-pressed={layerLines}
+                onClick={toggleLayerLines}
+                className={
+                  'rounded px-1 py-1 text-[11px] transition-colors ' +
+                  (layerLines ? 'bg-rauch text-bernstein' : 'text-asche hover:text-porzellan')
+                }
+              >
+                Layerlinien
+              </button>
+              <button
+                type="button"
+                aria-pressed={glassPreview}
+                onClick={toggleGlassPreview}
+                className={
+                  'rounded px-1 py-1 text-[11px] transition-colors ' +
+                  (glassPreview ? 'bg-rauch text-bernstein' : 'text-asche hover:text-porzellan')
+                }
+              >
+                Glas-Vorschau
+              </button>
+            </div>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-asche">
+              Glas-Vorschau rendert echte Brechung – sichtbar schöner, spürbar
+              GPU-lastiger. Durchlässigkeit je Farbe ist eine Schätzung.
             </p>
           </div>
         </Group>

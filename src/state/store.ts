@@ -24,6 +24,10 @@ interface StudioState {
   bulbBrightness: number
   /** Filament-Farbe der Vorschau (Bambu PETG Translucent), rein visuell */
   shadeColor: FilamentColor
+  /** Layerlinien-Optik (prozedurale Normal-Map) in der Vorschau */
+  layerLines: boolean
+  /** „Glas-Vorschau“: MeshTransmissionMaterial mit echter Brechung (GPU-lastig) */
+  glassPreview: boolean
 
   setParams: (patch: Partial<ShadeParams>) => void
   setProfile: (patch: Partial<ProfileParams>) => void
@@ -36,6 +40,8 @@ interface StudioState {
   setBulbBrightness: (value: number) => void
   setShadeColor: (color: FilamentColor) => void
   setMounting: (mounting: Mounting) => void
+  toggleLayerLines: () => void
+  toggleGlassPreview: () => void
 }
 
 export const useStudio = create<StudioState>()((set) => ({
@@ -46,6 +52,8 @@ export const useStudio = create<StudioState>()((set) => ({
   bulbBrightness: 1,
   shadeColor: PETG_TRANSLUCENT[0],
   mounting: 'haengend',
+  layerLines: true,
+  glassPreview: false,
 
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
   setProfile: (patch) =>
@@ -77,4 +85,6 @@ export const useStudio = create<StudioState>()((set) => ({
       params:
         mounting === 'haengend' ? { ...s.params, neckPosition: 'top' } : s.params,
     })),
+  toggleLayerLines: () => set((s) => ({ layerLines: !s.layerLines })),
+  toggleGlassPreview: () => set((s) => ({ glassPreview: !s.glassPreview })),
 }))

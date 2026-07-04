@@ -14,4 +14,13 @@ describe('PETG_TRANSLUCENT', () => {
       expect(f.hex, f.name).toMatch(/^#[0-9a-fA-F]{6}$/)
     }
   })
+
+  it('hat plausible Durchlässigkeiten (0 < td ≤ 1, Klar am durchlässigsten)', () => {
+    for (const f of PETG_TRANSLUCENT) {
+      expect(f.td, f.name).toBeGreaterThan(0)
+      expect(f.td, f.name).toBeLessThanOrEqual(1)
+    }
+    const maxTd = Math.max(...PETG_TRANSLUCENT.map((f) => f.td))
+    expect(PETG_TRANSLUCENT[0].td).toBe(maxTd)
+  })
 })
