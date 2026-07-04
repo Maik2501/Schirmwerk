@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { neckRadiusMm, overhangAngleDeg, radiusAt, smoothstep, TWO_PI } from './surface'
+import {
+  neckRadiusMm,
+  overhangAngleDeg,
+  radiusAt,
+  silhouetteOverhangProfile,
+  smoothstep,
+  TWO_PI,
+} from './surface'
 import { evalProfile } from './profile'
 import { defaultShadeParams } from './defaults'
 import type { ProfileParams, ShadeParams } from './types'
@@ -120,6 +127,78 @@ describe('Überhang-Winkel', () => {
     params.profile = { ...FREI, preset: 'konus', bottomRadiusMm: 70, topRadiusMm: 20, shapeAmount: 0 }
     params.neck = { socket: 'custom', holeDiameterMm: 40, extraClearanceMm: 0, heightMm: 0, blendMm: 0 }
     expect(overhangAngleDeg(params, 0, 25)).toBe(0)
+  })
+})
+
+describe('silhouetteOverhangProfile', () => {
+  /** Hüllkurve (max. Radius je Höhe) wie im Riss abtasten. */
+  function sampleOuter(params: ShadeParams, rows: number, thetaSamples: number) {
+    const outer: [number, number][] = []
+    for (let i = 0; i <= rows; i++) {
+      const z = (i / rows) * params.heightMm
+      let hi = -Infinity
+      for (let j = 0; j < thetaSamples; j++) {
+        hi = Math.max(hi, radiusAt(params, (j / thetaSamples) * TWO_PI, z))
+      }
+      outer.push([hi, z])
+    }
+    return outer
+  }
+
+  it('misst für den 45°-Konus überall ≈ 45°', () => {
+    const params = bareParams({ a1: 0 })
+    params.heightMm = 50
+    params.profile = { ...FREI, preset: 'konus', bottomRadiusMm: 20, topRadiusMm: 70, shapeAmount: 0 }
+    params.neck = { socket: 'custom', holeDiameterMm: 140, extraClearanceMm: 0, heightMm: 0, blendMm: 0 }
+    const { perRowDeg, maxDeg } = silhouetteOverhangProfile(sampleOuter(params, 20, 32))
+    for (const a of perRowDeg) expect(a).toBeCloseTo(45, 1)
+    expect(maxDeg).toBeCloseTo(45, 1)
+  })
+
+  it('meldet für Wellen + Twist am Zylinder KEINEN Überhang (keine Falschalarme an Flanken)', () => {
+    // Lokal kippt die Flächennormale hier weit nach unten (overhangAngleDeg
+    // misst 60°+), aber die Silhouette bleibt senkrecht – und genau solche
+    // Designs drucken nachweislich (Referenzfoto). Die Metrik darf hier
+    // nicht anschlagen.
+    const params = bareParams({ a1: 0.2, n1: 10, twistDeg: 180 })
+    let localMax = 0
+    for (let j = 0; j < 256; j++) {
+      localMax = Math.max(localMax, overhangAngleDeg(params, (j / 256) * TWO_PI, 50))
+    }
+    expect(localMax).toBeGreaterThan(45)
+    const { maxDeg } = silhouetteOverhangProfile(sampleOuter(params, 16, 96))
+    expect(maxDeg).toBeLessThan(1)
+  })
+
+  it('dämpft kurze Ausreißer über das ±10-mm-Fenster', () => {
+    // Einzel-Spike von 4 mm: lokal wären das atan(4/1) = 76°, übers
+    // Fenster gemessen nur ~11° – kurze Anstiege steckt der Druck weg.
+    const outer: [number, number][] = Array.from({ length: 41 }, (_, i) => [50, i])
+    outer[20][0] = 54
+    const { maxDeg } = silhouetteOverhangProfile(outer)
+    expect(maxDeg).toBeGreaterThan(8)
+    expect(maxDeg).toBeLessThan(15)
+  })
+
+  it('bleibt beim Startdesign unter der Warnschwelle (Fuß-Blend heilt)', () => {
+    // Das Referenzdesign druckt nachweislich – der Check darf es nicht
+    // rot markieren, obwohl der Wellen-Einlauf am Fuß lokal steil ist.
+    const { maxDeg } = silhouetteOverhangProfile(sampleOuter(defaultShadeParams(), 96, 128))
+    expect(maxDeg).toBeLessThan(50)
+  })
+
+  it('erkennt eine echte Auskragung und verortet sie in den richtigen Reihen', () => {
+    // Rampe r 30 → 80 über 20 mm Höhe (Steigung 2.5 ≙ 68°) mitten im Profil
+    const outer: [number, number][] = Array.from({ length: 61 }, (_, i) => {
+      const z = i
+      const r = z < 20 ? 30 : z < 40 ? 30 + (z - 20) * 2.5 : 80
+      return [r, z]
+    })
+    const { perRowDeg, maxDeg } = silhouetteOverhangProfile(outer)
+    expect(maxDeg).toBeGreaterThan(60)
+    expect(perRowDeg[30]).toBeGreaterThan(60) // Rampenmitte
+    expect(perRowDeg[5]).toBeLessThan(1) // Zylinderteile bleiben ruhig
+    expect(perRowDeg[55]).toBeLessThan(1)
   })
 })
 

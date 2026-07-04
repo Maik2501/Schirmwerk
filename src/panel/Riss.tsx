@@ -22,13 +22,21 @@
  */
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { evalProfile } from '../geometry/profile'
-import { clamp, radiusAt, TWO_PI } from '../geometry/surface'
+import {
+  clamp,
+  OVERHANG_LIMIT_DEG,
+  radiusAt,
+  silhouetteOverhangProfile,
+  TWO_PI,
+} from '../geometry/surface'
 import { useStudio } from '../state/store'
 
 const ROWS = 96
 const THETA_SAMPLES = 128
 /** Mindestabstand zweier Spline-Punkte in t (normierte Höhe) */
 const T_GAP = 0.02
+/** P1S-Bauraum (Würfelkante), nur Hinweis – wir begrenzen nicht hart */
+const BUILD_VOLUME_MM = 256
 
 type DragTarget =
   | { kind: 'end'; which: 'bottom' | 'top' }
@@ -43,7 +51,7 @@ export function Riss() {
   const H = params.heightMm
   const editing = profile.mode !== 'preset'
 
-  const { outer, inner, maxR } = useMemo(() => {
+  const { outer, inner, maxR, overhang } = useMemo(() => {
     const outer: [number, number][] = []
     const inner: [number, number][] = []
     let maxR = 0
@@ -60,8 +68,27 @@ export function Riss() {
       inner.push([lo, z])
       if (hi > maxR) maxR = hi
     }
-    return { outer, inner, maxR }
+    // Silhouetten-Überhang direkt aus der Hüllkurve (keine neuen Samples)
+    const overhang = silhouetteOverhangProfile(outer)
+    return { outer, inner, maxR, overhang }
   }, [params])
+
+  // Kritische Höhenzonen als zusammenhängende Läufe für die rote Markierung
+  const criticalRuns = useMemo(() => {
+    const runs: [number, number][] = [] // [startRow, endRow] inklusiv
+    let start = -1
+    for (let i = 0; i <= ROWS; i++) {
+      const critical = overhang.perRowDeg[i] > OVERHANG_LIMIT_DEG
+      if (critical && start < 0) start = i
+      if (!critical && start >= 0) {
+        runs.push([start, i - 1])
+        start = -1
+      }
+    }
+    if (start >= 0) runs.push([start, ROWS])
+    // Einzelreihen auf mindestens ein Segment verlängern (sonst unsichtbar)
+    return runs.map(([a, b]) => (a === b ? [Math.max(0, a - 1), Math.min(ROWS, b + 1)] : [a, b]))
+  }, [overhang])
 
   // Rohe Profilkurve P(z) – das editierbare Rückgrat (ohne Wellen/Blends)
   const spine = useMemo(() => {
@@ -310,6 +337,14 @@ export function Riss() {
           {/* obere Kante (Halsöffnung) */}
           <line x1={-topR} y1={H} x2={topR} y2={H} stroke="var(--color-bernstein)" strokeOpacity={editing ? 0.3 : 1} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
 
+          {/* Druckbarkeits-Check: Zonen mit Überhang über der Vase-Mode-Grenze */}
+          {criticalRuns.map(([a, b]) => (
+            <g key={`oh-${a}`}>
+              <polyline points={poly(outer.slice(a, b + 1), 1)} fill="none" stroke="var(--color-signal)" strokeWidth={2.5} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+              <polyline points={poly(outer.slice(a, b + 1), -1)} fill="none" stroke="var(--color-signal)" strokeWidth={2.5} strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+            </g>
+          ))}
+
           {editing && spine && (
             <>
               {/* editierbare Profilkurve: rechts das Original, links der Spiegel */}
@@ -349,9 +384,23 @@ export function Riss() {
           {profile.mode === 'preset' ? 'Seitenriss' : profile.mode === 'bezier' ? 'Bezier-Editor' : 'Spline-Editor'}
         </span>
         <span>
-          H {H.toFixed(0)} · Ø max {(2 * maxR).toFixed(0)} mm
+          H {H.toFixed(0)} · Ø max {(2 * maxR).toFixed(0)} mm ·{' '}
+          <span className={overhang.maxDeg > OVERHANG_LIMIT_DEG ? 'text-signal' : undefined}>
+            ∠ {overhang.maxDeg.toFixed(0)}°
+          </span>
         </span>
       </figcaption>
+      {overhang.maxDeg > OVERHANG_LIMIT_DEG && (
+        <p className="mt-1 font-mono text-[10px] leading-relaxed text-signal">
+          Silhouette kragt bis {overhang.maxDeg.toFixed(0)}° aus – Vase-Mode schafft
+          ~{OVERHANG_LIMIT_DEG}°, rote Zonen entschärfen.
+        </p>
+      )}
+      {(H > BUILD_VOLUME_MM || 2 * maxR > BUILD_VOLUME_MM) && (
+        <p className="mt-1 font-mono text-[10px] leading-relaxed text-signal">
+          Größer als der P1S-Bauraum ({BUILD_VOLUME_MM} mm Kante).
+        </p>
+      )}
       {editing && (
         <p className="mt-1 font-mono text-[10px] leading-relaxed text-asche/80">
           {profile.mode === 'bezier'

@@ -109,6 +109,78 @@ export function overhangAngleDeg(params: ShadeParams, theta: number, z: number):
   return Math.asin(clamp(-nz / len, 0, 1)) / DEG2RAD
 }
 
+/**
+ * Ab diesem Silhouetten-Überhang gilt Vase-Mode als kritisch: bis ~45–50°
+ * drucken PLA/PETG zuverlässig, darüber sacken auskragende Partien ab.
+ * Wir warnen, begrenzen aber nicht hart – Material, Kühlung und Tempo
+ * verschieben die Grenze in beide Richtungen.
+ */
+export const OVERHANG_LIMIT_DEG = 50
+
+export interface OverhangProfile {
+  /** Silhouetten-Überhang je Höhenreihe (ein Wert pro Hüllkurvenpunkt), Grad */
+  perRowDeg: Float64Array
+  /** Maximum über alle Reihen, Grad */
+  maxDeg: number
+}
+
+/**
+ * Druckbarkeits-Metrik für Vase-Mode: der Überhang der ÄUSSEREN SILHOUETTE
+ * (max. Radius je Höhe), gemessen als Steigung der Hüllkurve über ein
+ * ±windowMm-Fenster.
+ *
+ * Warum nicht der lokale Flächennormalen-Winkel (overhangAngleDeg)?
+ * Der überschätzt bei Twist-Wellen systematisch: An steilen Flanken kippt
+ * die Normale weit nach unten (rechnerisch 60°+), gedruckt wird trotzdem
+ * sauber, weil jede Raupe seitlich an der Nachbarspur der letzten Schicht
+ * klebt – unser Referenzdesign (65° lokal) ist der Beleg. Was im Vase-Mode
+ * wirklich kollabiert, sind Ringe, die als Ganzes auskragen: genau das
+ * misst die Silhouetten-Steigung.
+ *
+ * Das ±10-mm-Fenster kodiert die zweite Praxis-Erkenntnis: KURZE steile
+ * Anstiege heilen. Der Wellen-Einlauf am Fuß (volle Amplitude in 8 mm,
+ * lokal ~55°) druckt auf jeder Twist-Vase sauber – erst wer über
+ * Zentimeter hinweg steil auskragt (Teller, Glockenschulter, ausladender
+ * Bezier-Bauch), bekommt hängende Schichten. Kürzere Fenster warnen
+ * genau am Fuß-Blend des nachweislich gedruckten Referenzdesigns.
+ *
+ * Erwartet die bereits abgetastete Hüllkurve [r, z][] (aufsteigendes z,
+ * z. B. aus dem Riss) – kostet also keine weiteren radiusAt-Aufrufe.
+ * Nur nach außen kippende Silhouetten zählen (r wächst mit z); Einzüge
+ * stützt die jeweils vorherige Schicht.
+ */
+export function silhouetteOverhangProfile(
+  outer: readonly (readonly [number, number])[],
+  windowMm = 10,
+): OverhangProfile {
+  const n = outer.length
+  const perRowDeg = new Float64Array(n)
+  let maxDeg = 0
+  for (let i = 0; i < n; i++) {
+    // Fensterränder suchen: j−..j+ mit |z − z_i| ≤ windowMm
+    let lo = i
+    while (lo > 0 && outer[i][1] - outer[lo - 1][1] <= windowMm) lo--
+    let hi = i
+    while (hi < n - 1 && outer[hi + 1][1] - outer[i][1] <= windowMm) hi++
+    // An den Rändern einseitig auf volle Fensterbreite ausdehnen – sonst
+    // schrumpft die Messbasis auf die Hälfte und kurze Anstiege direkt
+    // am Bett (Fuß-Blend!) wirken doppelt so steil.
+    while (outer[hi][1] - outer[lo][1] < 2 * windowMm && (lo > 0 || hi < n - 1)) {
+      const below = outer[i][1] - outer[lo][1]
+      const above = outer[hi][1] - outer[i][1]
+      if (lo > 0 && (hi >= n - 1 || below <= above)) lo--
+      else hi++
+    }
+    const dz = outer[hi][1] - outer[lo][1]
+    if (dz <= 0) continue
+    const slope = (outer[hi][0] - outer[lo][0]) / dz
+    const deg = slope > 0 ? Math.atan(slope) / DEG2RAD : 0
+    perRowDeg[i] = deg
+    if (deg > maxDeg) maxDeg = deg
+  }
+  return { perRowDeg, maxDeg }
+}
+
 /** Kleinster Radius auf einem Abtast-Gitter – muss für druckbare Formen > 0 sein. */
 export function sampleMinRadius(params: ShadeParams, res: Resolution): number {
   let min = Infinity
