@@ -54,6 +54,7 @@ type DragTarget =
 export function Riss() {
   const params = useStudio((s) => s.params)
   const setProfile = useStudio((s) => s.setProfile)
+  const mounting = useStudio((s) => s.mounting)
 
   const profile = params.profile
   const H = params.heightMm
@@ -454,6 +455,10 @@ export function Riss() {
       <figcaption className="mt-1.5 flex items-baseline justify-between font-mono text-[10px] text-asche">
         <span>
           {profile.mode === 'preset' ? 'Seitenriss' : profile.mode === 'bezier' ? 'Bezier-Editor' : 'Spline-Editor'}
+          {/* Riss zeigt immer den Druckraum – kopfüber genutzte Lampe kennzeichnen */}
+          {mounting === 'stehend' && params.neckPosition === 'top' && (
+            <span className="text-asche/70"> · Drucklage (Nutzung kopfüber)</span>
+          )}
         </span>
         <span>
           H {H.toFixed(0)} · Ø max {(2 * maxR).toFixed(0)} mm ·{' '}

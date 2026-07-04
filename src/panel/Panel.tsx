@@ -232,24 +232,54 @@ export function Panel() {
             unit="mm"
             onChange={(v) => setParams({ heightMm: v })}
           />
-          <SliderInput
-            label="Durchmesser unten"
-            value={profile.bottomRadiusMm * 2}
-            min={30}
-            max={240}
-            step={1}
-            unit="mm"
-            onChange={(v) => setProfile({ bottomRadiusMm: v / 2 })}
-          />
-          <SliderInput
-            label="Durchmesser oben (vor Hals)"
-            value={profile.topRadiusMm * 2}
-            min={20}
-            max={240}
-            step={1}
-            unit="mm"
-            onChange={(v) => setProfile({ topRadiusMm: v / 2 })}
-          />
+          {/*
+            Durchmesser aus NUTZERSICHT beschriften und ordnen: Die stehende
+            Lampe mit Kragen oben wird kopfüber gedruckt – das Druck-„unten“
+            (bottomRadiusMm, am Bett) ist in der 3D-Ansicht dann OBEN. Die
+            Geometrie bleibt unberührt, nur Label + Reihenfolge folgen dem,
+            was man gerade sieht.
+          */}
+          {(() => {
+            const upsideDown = mounting === 'stehend' && params.neckPosition === 'top'
+            const bettEnde = (
+              <SliderInput
+                key="bett"
+                label={
+                  upsideDown
+                    ? 'Durchmesser oben (offener Rand)'
+                    : params.neckPosition === 'bottom'
+                      ? 'Durchmesser unten (über Hals)'
+                      : 'Durchmesser unten'
+                }
+                value={profile.bottomRadiusMm * 2}
+                min={30}
+                max={240}
+                step={1}
+                unit="mm"
+                onChange={(v) => setProfile({ bottomRadiusMm: v / 2 })}
+              />
+            )
+            const kopfEnde = (
+              <SliderInput
+                key="kopf"
+                label={
+                  upsideDown
+                    ? 'Durchmesser unten (vor Hals)'
+                    : params.neckPosition === 'bottom'
+                      ? 'Durchmesser oben (offener Rand)'
+                      : 'Durchmesser oben (vor Hals)'
+                }
+                value={profile.topRadiusMm * 2}
+                min={20}
+                max={240}
+                step={1}
+                unit="mm"
+                onChange={(v) => setProfile({ topRadiusMm: v / 2 })}
+              />
+            )
+            // „unten“ steht immer zuerst – kopfüber tauschen die Enden
+            return upsideDown ? [kopfEnde, bettEnde] : [bettEnde, kopfEnde]
+          })()}
           <SliderInput
             label="Bauch / Ausprägung"
             value={profile.shapeAmount * 100}
