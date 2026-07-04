@@ -29,6 +29,7 @@ export function defaultShadeParams(): ShadeParams {
     neckPosition: 'top',
     profile,
     waves: {
+      waveform: 'sinus',
       n1: 10,
       a1: 0.16,
       n2: 22,

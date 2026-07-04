@@ -28,11 +28,73 @@
  * Selbstschnitt-Kriterium, und Fächer-Deckel vom Mittelpunkt aus sind
  * garantiert gültig.
  */
-import type { NeckParams, Resolution, ShadeParams } from './types'
+import type { NeckParams, Resolution, ShadeParams, Waveform } from './types'
 import { evalProfile } from './profile'
 
 export const DEG2RAD = Math.PI / 180
 export const TWO_PI = Math.PI * 2
+
+// ---- Wellenformen ----------------------------------------------------------
+// Alle Formen sind auf [−1, 1] normiert und (für ganzzahliges n) 2π/n-
+// periodisch, damit Amplituden-Regler und Naht bei θ = 0 formunabhängig
+// funktionieren. Dreieck ist über asin(sin) exakt phasengleich zum Sinus.
+
+/** Sägezahn: langsamer Anstieg, steiler Abfall; Nulldurchgang bei x = 0. */
+function sawtooth(x: number): number {
+  const t = x / TWO_PI + 0.5
+  return 2 * (t - Math.floor(t)) - 1
+}
+
+/**
+ * Gielis-Superformel mit festen, organisch runden Exponenten.
+ * n2 = n3 macht sie exakt 2π/m-periodisch (|cos|↔|sin|-Symmetrie).
+ * Pro Symmetriezahl m wird der Wertebereich einmal abgetastet und
+ * memoisiert, damit die Normierung auf [−1, 1] keine Arbeit im
+ * Sampling-Pfad kostet.
+ */
+const SF_EXP = { n1: 2.5, n23: 1.3 }
+
+function superformulaRaw(m: number, phi: number): number {
+  const c = Math.abs(Math.cos((m * phi) / 4)) ** SF_EXP.n23
+  const s = Math.abs(Math.sin((m * phi) / 4)) ** SF_EXP.n23
+  return (c + s) ** (-1 / SF_EXP.n1)
+}
+
+const sfRangeCache = new Map<number, { lo: number; hi: number }>()
+
+function superformulaWave(mRaw: number, phi: number): number {
+  const m = Math.max(1, Math.round(mRaw))
+  let range = sfRangeCache.get(m)
+  if (!range) {
+    let lo = Infinity
+    let hi = -Infinity
+    for (let i = 0; i < 1024; i++) {
+      const v = superformulaRaw(m, (i / 1024) * TWO_PI)
+      if (v < lo) lo = v
+      if (v > hi) hi = v
+    }
+    range = { lo, hi }
+    sfRangeCache.set(m, range)
+  }
+  if (range.hi - range.lo < 1e-12) return 0
+  return ((superformulaRaw(m, phi) - range.lo) / (range.hi - range.lo)) * 2 - 1
+}
+
+/** Hauptwelle im Wellen-Bogenmaß x = n·θ' + φ, bzw. Superformel direkt in θ'. */
+function mainWave(form: Waveform, n: number, thetaPrime: number, phase: number): number {
+  const x = n * thetaPrime + phase
+  switch (form) {
+    case 'sinus':
+      return Math.sin(x)
+    case 'dreieck':
+      return (2 / Math.PI) * Math.asin(Math.sin(x))
+    case 'saegezahn':
+      return sawtooth(x)
+    case 'superformula':
+      // Phase als Wellen-Bogenmaß auf den Winkel zurückgerechnet
+      return superformulaWave(n, thetaPrime + phase / Math.max(1, n))
+  }
+}
 
 export function clamp(x: number, lo: number, hi: number): number {
   return x < lo ? lo : x > hi ? hi : x
@@ -53,12 +115,12 @@ export function neckRadiusMm(neck: NeckParams): number {
 /** Radius der Fläche an (θ, z). θ in Radiant, z in mm. */
 export function radiusAt(params: ShadeParams, theta: number, z: number): number {
   const H = params.heightMm
-  const { n1, a1, n2, a2, twistDeg, phase1Rad, phase2Rad } = params.waves
+  const { waveform, n1, a1, n2, a2, twistDeg, phase1Rad, phase2Rad } = params.waves
 
   // Muster-Rotation mit der Höhe (Twist), Sekundärwellen gegenläufig
   const tau = twistDeg * DEG2RAD * (z / H)
   const wave =
-    a1 * Math.sin(n1 * (theta - tau) + phase1Rad) +
+    a1 * mainWave(waveform, n1, theta - tau, phase1Rad) +
     a2 * Math.sin(n2 * (theta + tau) + phase2Rad)
 
   if (params.neckPosition === 'bottom') {

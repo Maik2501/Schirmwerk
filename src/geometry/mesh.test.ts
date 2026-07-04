@@ -22,7 +22,7 @@ function cylinderParams(): ShadeParams {
       bezier: { r1Mm: 0, t1: 1 / 3, r2Mm: 0, t2: 2 / 3 },
       spline: [],
     },
-    waves: { n1: 8, a1: 0, n2: 16, a2: 0, twistDeg: 0, phase1Rad: 0, phase2Rad: 0 },
+    waves: { waveform: 'sinus', n1: 8, a1: 0, n2: 16, a2: 0, twistDeg: 0, phase1Rad: 0, phase2Rad: 0 },
     neck: { socket: 'custom', holeDiameterMm: 99.6, extraClearanceMm: 0.4, heightMm: 0, blendMm: 0 },
     footBlendMm: 0,
   }

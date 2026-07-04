@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react'
 import { SOCKETS } from '../geometry/sockets'
 import { sampleMinRadius } from '../geometry/surface'
 import { stlByteLength } from '../geometry/stl'
-import type { ProfileMode, ProfilePreset, SocketType } from '../geometry/types'
+import type { ProfileMode, ProfilePreset, SocketType, Waveform } from '../geometry/types'
 import { PETG_TRANSLUCENT } from '../state/filaments'
 import { useStudio } from '../state/store'
 import { downloadStl, stlFileName } from './exportStl'
@@ -27,6 +27,13 @@ const PROFILE_PRESETS: { id: ProfilePreset; label: string }[] = [
 const MOUNTINGS: { id: 'haengend' | 'stehend'; label: string }[] = [
   { id: 'haengend', label: 'Hängend (Pendel)' },
   { id: 'stehend', label: 'Stehend (Fuß)' },
+]
+
+const WAVEFORMS: { id: Waveform; label: string }[] = [
+  { id: 'sinus', label: 'Sinus' },
+  { id: 'dreieck', label: 'Dreieck' },
+  { id: 'saegezahn', label: 'Sägezahn' },
+  { id: 'superformula', label: 'Superformel' },
 ]
 
 const CUSTOM_MODES: { id: Exclude<ProfileMode, 'preset'>; label: string }[] = [
@@ -237,6 +244,27 @@ export function Panel() {
         </Group>
 
         <Group title="Wellen">
+          <div>
+            <span className="mb-1.5 block text-xs text-asche">Wellenform</span>
+            <div className="grid grid-cols-4 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+              {WAVEFORMS.map((w) => (
+                <button
+                  key={w.id}
+                  type="button"
+                  aria-pressed={waves.waveform === w.id}
+                  onClick={() => setWaves({ waveform: w.id })}
+                  className={
+                    'rounded px-0.5 py-1 text-[10px] transition-colors ' +
+                    (waves.waveform === w.id
+                      ? 'bg-rauch text-bernstein'
+                      : 'text-asche hover:text-porzellan')
+                  }
+                >
+                  {w.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <SliderInput
             label="Wellen pro Umdrehung"
             value={waves.n1}
@@ -289,6 +317,20 @@ export function Panel() {
             unit="mm"
             onChange={(v) => setParams({ footBlendMm: v })}
           />
+          <button
+            type="button"
+            onClick={() =>
+              // verschiebt nur die Phasenlagen – gleiche Parameter, neues
+              // Interferenzmuster von Haupt- und Feinwellen
+              setWaves({
+                phase1Rad: Math.random() * 2 * Math.PI,
+                phase2Rad: Math.random() * 2 * Math.PI,
+              })
+            }
+            className="w-full rounded-md border border-white/10 px-3 py-1.5 text-xs text-asche transition-colors hover:border-white/25 hover:text-porzellan"
+          >
+            Variante würfeln ⚄
+          </button>
         </Group>
 
         <Group title="Fassung" defaultOpen={false}>

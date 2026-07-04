@@ -51,7 +51,16 @@ export interface ProfileParams {
   spline: SplinePoint[]
 }
 
+/**
+ * Form der Hauptwelle. Die Feinwellen (n2/a2) bleiben immer sinusförmig –
+ * sie sind als feiner Ripple über der Grundform gedacht.
+ * 'superformula' nutzt die Gielis-Superformel mit festen, organisch
+ * runden Exponenten; n1 wird dort zur Symmetriezahl m.
+ */
+export type Waveform = 'sinus' | 'dreieck' | 'saegezahn' | 'superformula'
+
 export interface WaveParams {
+  waveform: Waveform
   /** Hauptwellen pro Umdrehung – ganzzahlig, sonst entsteht bei θ=0 eine Naht */
   n1: number
   /** Amplitude der Hauptwellen, relativ zum lokalen Profilradius (0.15 = ±15 %) */

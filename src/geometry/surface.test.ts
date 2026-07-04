@@ -3,6 +3,7 @@ import {
   neckRadiusMm,
   overhangAngleDeg,
   radiusAt,
+  sampleMinRadius,
   silhouetteOverhangProfile,
   smoothstep,
   TWO_PI,
@@ -25,6 +26,7 @@ function bareParams(overrides?: Partial<ShadeParams['waves']>): ShadeParams {
     neckPosition: 'top',
     profile: { ...FREI, preset: 'zylinder', bottomRadiusMm: 50, topRadiusMm: 50, shapeAmount: 0 },
     waves: {
+      waveform: 'sinus',
       n1: 6, a1: 0.2, n2: 12, a2: 0, twistDeg: 0, phase1Rad: 0, phase2Rad: 0,
       ...overrides,
     },
@@ -128,6 +130,65 @@ describe('Überhang-Winkel', () => {
     params.profile = { ...FREI, preset: 'konus', bottomRadiusMm: 70, topRadiusMm: 20, shapeAmount: 0 }
     params.neck = { socket: 'custom', holeDiameterMm: 40, extraClearanceMm: 0, heightMm: 0, blendMm: 0 }
     expect(overhangAngleDeg(params, 0, 25)).toBe(0)
+  })
+})
+
+describe('Wellenformen', () => {
+  /** min/max Radius über den Umfang bei halber Höhe. */
+  function radiusSpan(params: ShadeParams) {
+    let lo = Infinity
+    let hi = -Infinity
+    for (let i = 0; i < 4096; i++) {
+      const r = radiusAt(params, (i / 4096) * TWO_PI, 50)
+      lo = Math.min(lo, r)
+      hi = Math.max(hi, r)
+    }
+    return { lo, hi }
+  }
+
+  it('Dreieck erreicht exakt die volle Amplitude und ist phasengleich zum Sinus', () => {
+    const params = bareParams()
+    params.waves.waveform = 'dreieck'
+    const { lo, hi } = radiusSpan(params)
+    expect(hi).toBeCloseTo(50 * 1.2, 3)
+    expect(lo).toBeCloseTo(50 * 0.8, 3)
+    // Berg an derselben Stelle wie beim Sinus: sin(6θ)=1 → θ = π/12
+    expect(radiusAt(params, Math.PI / 12, 50)).toBeCloseTo(60, 6)
+  })
+
+  it('Sägezahn füllt das Amplitudenband und bleibt 2π/n-periodisch', () => {
+    const params = bareParams()
+    params.waves.waveform = 'saegezahn'
+    const { lo, hi } = radiusSpan(params)
+    expect(hi).toBeGreaterThan(50 * 1.19)
+    expect(lo).toBeLessThan(50 * 0.81)
+    for (const theta of [0.3, 1.1, 2.4]) {
+      expect(radiusAt(params, theta + TWO_PI / 6, 50)).toBeCloseTo(radiusAt(params, theta, 50), 9)
+    }
+  })
+
+  it('Superformel ist auf das Amplitudenband normiert und n1-zählig', () => {
+    const params = bareParams()
+    params.waves.waveform = 'superformula'
+    const { lo, hi } = radiusSpan(params)
+    // normiert: Extremwerte werden angenommen, nichts schießt darüber hinaus
+    expect(hi).toBeLessThanOrEqual(50 * 1.2 + 1e-6)
+    expect(lo).toBeGreaterThanOrEqual(50 * 0.8 - 1e-6)
+    expect(hi).toBeGreaterThan(50 * 1.19)
+    expect(lo).toBeLessThan(50 * 0.81)
+    // n2 = n3 der Gielis-Formel ⇒ exakt 2π/m-periodisch
+    for (const theta of [0.2, 0.9, 3.3]) {
+      expect(radiusAt(params, theta + TWO_PI / 6, 50)).toBeCloseTo(radiusAt(params, theta, 50), 9)
+    }
+  })
+
+  it('hält r > 0 für alle Formen mit Startdesign-Wellen', () => {
+    for (const waveform of ['dreieck', 'saegezahn', 'superformula'] as const) {
+      const params = defaultShadeParams()
+      params.waves.waveform = waveform
+      const min = sampleMinRadius(params, { thetaSegments: 128, zSegments: 96 })
+      expect(min, waveform).toBeGreaterThan(0)
+    }
   })
 })
 
