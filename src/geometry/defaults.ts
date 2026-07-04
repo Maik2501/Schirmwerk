@@ -5,18 +5,28 @@
  * 10 tiefe Hauptwellen, feine gegenläufige Ripples, kräftiger Twist,
  * E27-Hals. Maße passen bequem auf einen Bambu Lab P1S (256×256×256 mm).
  */
-import type { Resolution, ShadeParams } from './types'
+import type { ProfileParams, Resolution, ShadeParams } from './types'
 import { SOCKETS } from './sockets'
+import { seedBezierFromProfile, seedSplineFromProfile } from './profile'
 
 export function defaultShadeParams(): ShadeParams {
+  const profile: ProfileParams = {
+    mode: 'preset',
+    preset: 'tropfen',
+    bottomRadiusMm: 46,
+    topRadiusMm: 26,
+    shapeAmount: 0.65,
+    // Platzhalter – gleich darunter aus der Preset-Kurve geseedet (und bei
+    // jedem Moduswechsel im Store ohnehin frisch übernommen).
+    bezier: { r1Mm: 46, t1: 1 / 3, r2Mm: 26, t2: 2 / 3 },
+    spline: [],
+  }
+  profile.bezier = seedBezierFromProfile(profile)
+  profile.spline = seedSplineFromProfile(profile)
+
   return {
     heightMm: 170,
-    profile: {
-      preset: 'tropfen',
-      bottomRadiusMm: 46,
-      topRadiusMm: 26,
-      shapeAmount: 0.65,
-    },
+    profile,
     waves: {
       n1: 10,
       a1: 0.16,

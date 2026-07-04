@@ -5,7 +5,7 @@
  * die Umrechnung in die Geometrie-Parameter passiert genau hier.
  */
 import { SOCKETS } from '../geometry/sockets'
-import type { ProfilePreset, SocketType } from '../geometry/types'
+import type { ProfileMode, ProfilePreset, SocketType } from '../geometry/types'
 import { useStudio } from '../state/store'
 import { Group } from './Group'
 import { Riss } from './Riss'
@@ -18,6 +18,11 @@ const PROFILE_PRESETS: { id: ProfilePreset; label: string }[] = [
   { id: 'glocke', label: 'Glocke' },
 ]
 
+const CUSTOM_MODES: { id: Exclude<ProfileMode, 'preset'>; label: string }[] = [
+  { id: 'bezier', label: 'Bezier-Kurve' },
+  { id: 'spline', label: 'Spline-Punkte' },
+]
+
 const SOCKET_OPTIONS: { id: SocketType; label: string }[] = [
   { id: 'e27', label: 'E27' },
   { id: 'e14', label: 'E14' },
@@ -28,10 +33,13 @@ export function Panel() {
   const params = useStudio((s) => s.params)
   const previewRes = useStudio((s) => s.previewRes)
   const exportRes = useStudio((s) => s.exportRes)
-  const { setParams, setProfile, setWaves, setNeck, setPreviewRes, setExportRes } = useStudio()
+  const { setParams, setProfile, setProfileMode, setWaves, setNeck, setPreviewRes, setExportRes } =
+    useStudio()
 
   const { profile, waves, neck } = params
-  const shapeless = profile.preset === 'zylinder' || profile.preset === 'konus'
+  const editing = profile.mode !== 'preset'
+  // Bauch-Regler wirkt nur auf Presets mit Formanteil
+  const shapeless = editing || profile.preset === 'zylinder' || profile.preset === 'konus'
 
   return (
     <div className="flex h-full flex-col">
@@ -45,11 +53,11 @@ export function Panel() {
                 <button
                   key={p.id}
                   type="button"
-                  aria-pressed={profile.preset === p.id}
-                  onClick={() => setProfile({ preset: p.id })}
+                  aria-pressed={!editing && profile.preset === p.id}
+                  onClick={() => setProfile({ preset: p.id, mode: 'preset' })}
                   className={
                     'rounded px-1 py-1 text-[11px] transition-colors ' +
-                    (profile.preset === p.id
+                    (!editing && profile.preset === p.id
                       ? 'bg-rauch text-bernstein'
                       : 'text-asche hover:text-porzellan')
                   }
@@ -58,6 +66,29 @@ export function Panel() {
                 </button>
               ))}
             </div>
+            <div className="mt-1 grid grid-cols-2 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+              {CUSTOM_MODES.map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  aria-pressed={profile.mode === m.id}
+                  onClick={() => setProfileMode(m.id)}
+                  className={
+                    'rounded px-1 py-1 text-[11px] transition-colors ' +
+                    (profile.mode === m.id
+                      ? 'bg-rauch text-bernstein'
+                      : 'text-asche hover:text-porzellan')
+                  }
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {editing && (
+              <p className="mt-1.5 text-[10px] leading-relaxed text-asche">
+                Freie Form übernimmt die aktuelle Kurve – oben im Riss ziehen.
+              </p>
+            )}
           </div>
           <SliderInput
             label="Höhe"

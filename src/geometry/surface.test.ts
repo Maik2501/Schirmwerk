@@ -2,13 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { neckRadiusMm, overhangAngleDeg, radiusAt, smoothstep, TWO_PI } from './surface'
 import { evalProfile } from './profile'
 import { defaultShadeParams } from './defaults'
-import type { ShadeParams } from './types'
+import type { ProfileParams, ShadeParams } from './types'
+
+/** Platzhalter für die freien Modi – im Preset-Modus ungenutzt. */
+const FREI: Pick<ProfileParams, 'mode' | 'bezier' | 'spline'> = {
+  mode: 'preset',
+  bezier: { r1Mm: 0, t1: 1 / 3, r2Mm: 0, t2: 2 / 3 },
+  spline: [],
+}
 
 /** Parametersatz ohne Hals/Fuß-Blend, damit die Wellenformel pur messbar ist. */
 function bareParams(overrides?: Partial<ShadeParams['waves']>): ShadeParams {
   return {
     heightMm: 100,
-    profile: { preset: 'zylinder', bottomRadiusMm: 50, topRadiusMm: 50, shapeAmount: 0 },
+    profile: { ...FREI, preset: 'zylinder', bottomRadiusMm: 50, topRadiusMm: 50, shapeAmount: 0 },
     waves: {
       n1: 6, a1: 0.2, n2: 12, a2: 0, twistDeg: 0, phase1Rad: 0, phase2Rad: 0,
       ...overrides,
@@ -102,7 +109,7 @@ describe('Überhang-Winkel', () => {
   it('ist 45° für einen nach oben öffnenden 45°-Konus', () => {
     const params = bareParams({ a1: 0 })
     params.heightMm = 50
-    params.profile = { preset: 'konus', bottomRadiusMm: 20, topRadiusMm: 70, shapeAmount: 0 }
+    params.profile = { ...FREI, preset: 'konus', bottomRadiusMm: 20, topRadiusMm: 70, shapeAmount: 0 }
     params.neck = { socket: 'custom', holeDiameterMm: 140, extraClearanceMm: 0, heightMm: 0, blendMm: 0 }
     expect(overhangAngleDeg(params, 0, 25)).toBeCloseTo(45, 1)
   })
@@ -110,7 +117,7 @@ describe('Überhang-Winkel', () => {
   it('zählt nach innen geneigte Wände (gestützt) nicht als Überhang', () => {
     const params = bareParams({ a1: 0 })
     params.heightMm = 50
-    params.profile = { preset: 'konus', bottomRadiusMm: 70, topRadiusMm: 20, shapeAmount: 0 }
+    params.profile = { ...FREI, preset: 'konus', bottomRadiusMm: 70, topRadiusMm: 20, shapeAmount: 0 }
     params.neck = { socket: 'custom', holeDiameterMm: 40, extraClearanceMm: 0, heightMm: 0, blendMm: 0 }
     expect(overhangAngleDeg(params, 0, 25)).toBe(0)
   })
@@ -127,13 +134,13 @@ describe('Bausteine', () => {
   })
 
   it('Bezier-Profil trifft die Endradien exakt', () => {
-    const profile = { preset: 'tropfen', bottomRadiusMm: 46, topRadiusMm: 26, shapeAmount: 0.65 } as const
+    const profile: ProfileParams = { ...FREI, preset: 'tropfen', bottomRadiusMm: 46, topRadiusMm: 26, shapeAmount: 0.65 }
     expect(evalProfile(profile, 0)).toBeCloseTo(46, 9)
     expect(evalProfile(profile, 1)).toBeCloseTo(26, 9)
   })
 
   it('Tropfen-Profil baucht über beide Endradien hinaus', () => {
-    const profile = { preset: 'tropfen', bottomRadiusMm: 46, topRadiusMm: 26, shapeAmount: 0.65 } as const
+    const profile: ProfileParams = { ...FREI, preset: 'tropfen', bottomRadiusMm: 46, topRadiusMm: 26, shapeAmount: 0.65 }
     let max = 0
     for (let t = 0; t <= 1; t += 0.01) max = Math.max(max, evalProfile(profile, t))
     expect(max).toBeGreaterThan(46)

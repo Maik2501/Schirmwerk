@@ -4,8 +4,9 @@
  * Geometrie wird hier NICHT berechnet – das bleibt im Geometrie-Modul.
  */
 import { create } from 'zustand'
-import type { NeckParams, ProfileParams, Resolution, ShadeParams, WaveParams } from '../geometry/types'
+import type { NeckParams, ProfileMode, ProfileParams, Resolution, ShadeParams, WaveParams } from '../geometry/types'
 import { defaultShadeParams, EXPORT_RESOLUTION, PREVIEW_RESOLUTION } from '../geometry/defaults'
+import { seedBezierFromProfile, seedSplineFromProfile } from '../geometry/profile'
 
 interface StudioState {
   params: ShadeParams
@@ -18,6 +19,7 @@ interface StudioState {
 
   setParams: (patch: Partial<ShadeParams>) => void
   setProfile: (patch: Partial<ProfileParams>) => void
+  setProfileMode: (mode: ProfileMode) => void
   setWaves: (patch: Partial<WaveParams>) => void
   setNeck: (patch: Partial<NeckParams>) => void
   setPreviewRes: (patch: Partial<Resolution>) => void
@@ -36,6 +38,17 @@ export const useStudio = create<StudioState>()((set) => ({
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
   setProfile: (patch) =>
     set((s) => ({ params: { ...s.params, profile: { ...s.params.profile, ...patch } } })),
+  setProfileMode: (mode) =>
+    set((s) => {
+      const prev = s.params.profile
+      if (mode === prev.mode) return s
+      // Beim Einstieg in einen freien Modus die aktuell sichtbare Kurve
+      // übernehmen – die Form springt beim Umschalten nie.
+      const profile: ProfileParams = { ...prev, mode }
+      if (mode === 'bezier') profile.bezier = seedBezierFromProfile(prev)
+      if (mode === 'spline') profile.spline = seedSplineFromProfile(prev)
+      return { params: { ...s.params, profile } }
+    }),
   setWaves: (patch) =>
     set((s) => ({ params: { ...s.params, waves: { ...s.params.waves, ...patch } } })),
   setNeck: (patch) =>

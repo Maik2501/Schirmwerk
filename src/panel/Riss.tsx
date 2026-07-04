@@ -1,21 +1,47 @@
 /**
  * Signature-Element „Der Riss“: technischer Live-Seitenriss des Schirms.
  *
- * Gezeichnet werden die äußere Hüllkurve (max. Radius je Höhe, Bernstein)
- * und die innere Hüllkurve (min. Radius, gedämpft) – so sieht man Profil
- * UND Wellentiefe auf einen Blick, in echten Millimeter-Proportionen.
- * Ab Feature 4 färben sich hier Zonen mit kritischem Überhang signalrot,
- * nach dem MVP wird der Riss zum Bezier-Editor.
+ * Im Preset-Modus reine Anzeige: äußere Hüllkurve (max. Radius je Höhe,
+ * Bernstein) und innere Hüllkurve (min. Radius, gedämpft) zeigen Profil UND
+ * Wellentiefe auf einen Blick, in echten Millimeter-Proportionen.
+ *
+ * In den freien Modi wird der Riss zum Editor: er wächst auf doppelte Höhe
+ * und zeigt die rohe Profilkurve P(z) mit ziehbaren Punkten – Bezier-Griffe
+ * (inkl. Kontrollpolygon) bzw. Spline-Stützpunkte (Klick auf die Kurve fügt
+ * hinzu, Doppelklick löscht). Die Endpunkte unten/oben sind horizontal
+ * ziehbar und koppeln direkt an die Durchmesser-Regler im Panel.
+ *
+ * Interaktions-Details:
+ * - Während eines Drags wird die viewBox eingefroren, sonst liefe die Skala
+ *   unter dem Zeiger weg (Radius wächst → Ansicht zoomt raus → Punkt
+ *   springt) – eine Rückkopplung, die Präzision unmöglich macht.
+ * - Punktgrößen sind in Pixeln gedacht und werden über den gemessenen
+ *   px/mm-Maßstab in SVG-Einheiten umgerechnet (Touch-Ziele ≥ 32 px).
+ * - Mit dem Druckbarkeits-Check färben sich hier später Zonen mit
+ *   kritischem Überhang signalrot.
  */
-import { useMemo } from 'react'
-import { radiusAt, TWO_PI } from '../geometry/surface'
+import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import { evalProfile } from '../geometry/profile'
+import { clamp, radiusAt, TWO_PI } from '../geometry/surface'
 import { useStudio } from '../state/store'
 
 const ROWS = 96
 const THETA_SAMPLES = 128
+/** Mindestabstand zweier Spline-Punkte in t (normierte Höhe) */
+const T_GAP = 0.02
+
+type DragTarget =
+  | { kind: 'end'; which: 'bottom' | 'top' }
+  | { kind: 'handle'; which: 1 | 2 }
+  | { kind: 'point'; index: number }
 
 export function Riss() {
   const params = useStudio((s) => s.params)
+  const setProfile = useStudio((s) => s.setProfile)
+
+  const profile = params.profile
+  const H = params.heightMm
+  const editing = profile.mode !== 'preset'
 
   const { outer, inner, maxR } = useMemo(() => {
     const outer: [number, number][] = []
@@ -37,42 +63,302 @@ export function Riss() {
     return { outer, inner, maxR }
   }, [params])
 
-  const H = params.heightMm
-  const pad = 8
-  const topR = outer[outer.length - 1][0]
+  // Rohe Profilkurve P(z) – das editierbare Rückgrat (ohne Wellen/Blends)
+  const spine = useMemo(() => {
+    if (!editing) return null
+    const pts: [number, number][] = []
+    for (let i = 0; i <= ROWS; i++) {
+      const t = i / ROWS
+      pts.push([evalProfile(profile, t), t * H])
+    }
+    return pts
+  }, [editing, profile, H])
 
+  // Sichtradius: Hüllkurve plus alles Editierbare (Griffe können außerhalb
+  // der Kurve liegen und sollen nie aus dem Bild fallen)
+  const viewR = useMemo(() => {
+    let m = maxR
+    if (spine) for (const [r] of spine) m = Math.max(m, r)
+    if (editing && profile.mode === 'bezier') {
+      m = Math.max(m, profile.bezier.r1Mm, profile.bezier.r2Mm)
+    }
+    if (editing && profile.mode === 'spline') {
+      for (const p of profile.spline) m = Math.max(m, p.rMm)
+    }
+    return m
+  }, [maxR, spine, editing, profile])
+
+  const pad = 8
+  const vbString = `${-viewR - pad} ${-pad} ${2 * (viewR + pad)} ${H + 2 * pad}`
+
+  // ---- Drag-Infrastruktur ------------------------------------------------
+
+  const svgRef = useRef<SVGSVGElement>(null)
+  const dragRef = useRef<DragTarget | null>(null)
+  const frozenVbRef = useRef<string | null>(null)
+  const [dragging, setDragging] = useState(false)
+  const viewBox = dragging && frozenVbRef.current ? frozenVbRef.current : vbString
+
+  // px-pro-mm-Maßstab messen, damit Punkt- und Touchgrößen in Pixeln stimmen
+  const [pxPerMm, setPxPerMm] = useState(1.4)
+  const measure = useCallback(() => {
+    const svg = svgRef.current
+    if (!svg) return
+    const rect = svg.getBoundingClientRect()
+    const v = svg.viewBox.baseVal
+    if (rect.width === 0 || v.width === 0) return
+    const s = Math.min(rect.width / v.width, rect.height / v.height)
+    setPxPerMm((prev) => (Math.abs(prev - s) > 1e-3 ? s : prev))
+  }, [])
+  useLayoutEffect(() => {
+    // nach jedem Render – viewBox und Elementhöhe können sich geändert haben
+    measure()
+  })
+  useLayoutEffect(() => {
+    const ro = new ResizeObserver(measure)
+    if (svgRef.current) ro.observe(svgRef.current)
+    return () => ro.disconnect()
+  }, [measure])
+
+  /** Client-Koordinaten → Modellraum: x in mm (Vorzeichen = Seite), z in mm. */
+  const toModel = (e: { clientX: number; clientY: number }) => {
+    const svg = svgRef.current!
+    const rect = svg.getBoundingClientRect()
+    const v = svg.viewBox.baseVal
+    const s = Math.min(rect.width / v.width, rect.height / v.height)
+    const ox = (rect.width - v.width * s) / 2
+    const oy = (rect.height - v.height * s) / 2
+    const x = v.x + (e.clientX - rect.left - ox) / s
+    const y = v.y + (e.clientY - rect.top - oy) / s
+    // Das Zeichen-g spiegelt die y-Achse (Modell-z nach oben): z = H − y
+    return { x, z: H - y }
+  }
+
+  /** Pointer ans SVG binden; kann werfen, wenn der Pointer schon weg ist. */
+  const capturePointer = (pointerId: number) => {
+    try {
+      svgRef.current?.setPointerCapture(pointerId)
+    } catch {
+      // Drag läuft dann ohne Capture – Move-Events kommen weiter, solange
+      // der Zeiger über dem SVG bleibt.
+    }
+  }
+
+  const beginDrag = (target: DragTarget) => (e: ReactPointerEvent<SVGElement>) => {
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    e.stopPropagation()
+    capturePointer(e.pointerId)
+    dragRef.current = target
+    frozenVbRef.current = vbString
+    setDragging(true)
+  }
+
+  const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const target = dragRef.current
+    if (!target) return
+    e.preventDefault()
+    const { x, z } = toModel(e)
+    // beide Spiegelseiten greifen; Radius nie unter 1 mm (r > 0-Kriterium)
+    const r = Math.max(1, Math.abs(x))
+
+    if (target.kind === 'end') {
+      setProfile(target.which === 'bottom' ? { bottomRadiusMm: r } : { topRadiusMm: r })
+    } else if (target.kind === 'handle') {
+      const t = clamp(z / H, 0, 1)
+      const b = { ...profile.bezier }
+      if (target.which === 1) {
+        b.r1Mm = r
+        b.t1 = Math.min(t, b.t2) // Invariante t1 ≤ t2: Höhe bleibt monoton
+      } else {
+        b.r2Mm = r
+        b.t2 = Math.max(t, b.t1)
+      }
+      setProfile({ bezier: b })
+    } else {
+      const pts = profile.spline.map((p) => ({ ...p }))
+      const lo = (target.index === 0 ? 0 : pts[target.index - 1].t) + T_GAP
+      const hi = (target.index === pts.length - 1 ? 1 : pts[target.index + 1].t) - T_GAP
+      pts[target.index] = { rMm: r, t: clamp(z / H, lo, hi) }
+      setProfile({ spline: pts })
+    }
+  }
+
+  const endDrag = () => {
+    dragRef.current = null
+    frozenVbRef.current = null
+    setDragging(false)
+  }
+
+  /** Klick auf freie Fläche nahe der Kurve fügt einen Spline-Punkt ein. */
+  const onSvgPointerDown = (e: ReactPointerEvent<SVGSVGElement>) => {
+    if (profile.mode !== 'spline') return
+    if (e.pointerType === 'mouse' && e.button !== 0) return
+    const { x, z } = toModel(e)
+    const t = z / H
+    if (t < T_GAP || t > 1 - T_GAP) return
+    if (profile.spline.some((p) => Math.abs(p.t - t) < T_GAP)) return
+    // nur in Kurvennähe (±20 px), sonst produziert jeder Fehlklick Punkte
+    if (Math.abs(Math.abs(x) - evalProfile(profile, t)) > 20 / pxPerMm) return
+
+    const neu = { rMm: Math.max(1, Math.abs(x)), t }
+    const pts = [...profile.spline.map((p) => ({ ...p })), neu].sort((a, b) => a.t - b.t)
+    setProfile({ spline: pts })
+    // frisch gesetzten Punkt direkt greifen
+    capturePointer(e.pointerId)
+    dragRef.current = { kind: 'point', index: pts.indexOf(neu) }
+    frozenVbRef.current = vbString
+    setDragging(true)
+  }
+
+  const removePoint = (index: number) => () => {
+    setProfile({ spline: profile.spline.filter((_, i) => i !== index) })
+  }
+
+  // ---- Darstellung ---------------------------------------------------------
+
+  const topR = outer[outer.length - 1][0]
   const poly = (pts: [number, number][], sign: 1 | -1) =>
     pts.map(([r, z]) => `${(sign * r).toFixed(2)},${z.toFixed(2)}`).join(' ')
 
+  // Punktgrößen in mm, aus Pixel-Wunschgrößen zurückgerechnet
+  const dotR = 5 / pxPerMm
+  const hitR = 16 / pxPerMm
+  const sqR = 4 / pxPerMm
+
+  const bez = profile.bezier
+  const bezierPts: [number, number][] = [
+    [profile.bottomRadiusMm, 0],
+    [bez.r1Mm, bez.t1 * H],
+    [bez.r2Mm, bez.t2 * H],
+    [profile.topRadiusMm, H],
+  ]
+  const splinePts: [number, number][] = profile.spline.map((p) => [p.rMm, p.t * H])
+
+  /** Ziehbarer Punkt mit unsichtbarer, touch-tauglicher Trefferfläche. */
+  const grip = (
+    key: string,
+    [r, z]: [number, number],
+    target: DragTarget,
+    opts?: { square?: boolean; onDouble?: () => void },
+  ) => (
+    <g key={key} className="cursor-grab active:cursor-grabbing">
+      {opts?.square ? (
+        <rect
+          x={r - sqR}
+          y={z - sqR}
+          width={2 * sqR}
+          height={2 * sqR}
+          fill="var(--color-kohle)"
+          stroke="var(--color-bernstein)"
+          strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
+        />
+      ) : (
+        <circle
+          cx={r}
+          cy={z}
+          r={dotR}
+          fill="var(--color-kohle)"
+          stroke="var(--color-bernstein)"
+          strokeWidth={1.5}
+          vectorEffect="non-scaling-stroke"
+        />
+      )}
+      <circle
+        cx={r}
+        cy={z}
+        r={hitR}
+        fill="transparent"
+        style={{ pointerEvents: 'all' }}
+        onPointerDown={beginDrag(target)}
+        onDoubleClick={opts?.onDouble}
+      />
+    </g>
+  )
+
   return (
-    <figure className="border-b border-white/5 px-4 py-3">
+    <figure className="border-b border-white/5 px-4 py-3 select-none">
       <svg
-        viewBox={`${-maxR - pad} ${-pad} ${2 * (maxR + pad)} ${H + 2 * pad}`}
-        className="mx-auto h-36 w-full"
+        ref={svgRef}
+        viewBox={viewBox}
+        className={
+          'mx-auto w-full transition-[height] duration-300 ' + (editing ? 'h-72' : 'h-36')
+        }
+        style={{ touchAction: editing ? 'none' : undefined }}
         role="img"
-        aria-label={`Seitenriss: Höhe ${H.toFixed(0)} mm, größter Durchmesser ${(2 * maxR).toFixed(0)} mm`}
+        aria-label={
+          `Seitenriss: Höhe ${H.toFixed(0)} mm, größter Durchmesser ${(2 * maxR).toFixed(0)} mm` +
+          (editing ? ' – Profilkurve mit ziehbaren Punkten' : '')
+        }
+        onPointerDown={onSvgPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onLostPointerCapture={endDrag}
       >
         {/* SVG-y zeigt nach unten, Modell-z nach oben → spiegeln */}
         <g transform={`scale(1,-1) translate(0,${-H})`}>
           {/* Mittelachse + Druckbett */}
           <line x1={0} y1={-2} x2={0} y2={H + 2} stroke="var(--color-asche)" strokeOpacity={0.25} strokeDasharray="4 5" vectorEffect="non-scaling-stroke" />
-          <line x1={-maxR - 4} y1={0} x2={maxR + 4} y2={0} stroke="var(--color-asche)" strokeOpacity={0.4} vectorEffect="non-scaling-stroke" />
+          <line x1={-viewR - 4} y1={0} x2={viewR + 4} y2={0} stroke="var(--color-asche)" strokeOpacity={0.4} vectorEffect="non-scaling-stroke" />
           {/* innere Hüllkurve (Wellentäler) */}
-          <polyline points={poly(inner, 1)} fill="none" stroke="var(--color-asche)" strokeOpacity={0.45} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
-          <polyline points={poly(inner, -1)} fill="none" stroke="var(--color-asche)" strokeOpacity={0.45} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
-          {/* äußere Silhouette (Wellenberge) */}
-          <polyline points={poly(outer, 1)} fill="none" stroke="var(--color-bernstein)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-          <polyline points={poly(outer, -1)} fill="none" stroke="var(--color-bernstein)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          <polyline points={poly(inner, 1)} fill="none" stroke="var(--color-asche)" strokeOpacity={editing ? 0.25 : 0.45} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+          <polyline points={poly(inner, -1)} fill="none" stroke="var(--color-asche)" strokeOpacity={editing ? 0.25 : 0.45} strokeDasharray="2 3" vectorEffect="non-scaling-stroke" />
+          {/* äußere Silhouette (Wellenberge) – beim Editieren nur Kontext */}
+          <polyline points={poly(outer, 1)} fill="none" stroke="var(--color-bernstein)" strokeOpacity={editing ? 0.3 : 1} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          <polyline points={poly(outer, -1)} fill="none" stroke="var(--color-bernstein)" strokeOpacity={editing ? 0.3 : 1} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
           {/* obere Kante (Halsöffnung) */}
-          <line x1={-topR} y1={H} x2={topR} y2={H} stroke="var(--color-bernstein)" strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+          <line x1={-topR} y1={H} x2={topR} y2={H} stroke="var(--color-bernstein)" strokeOpacity={editing ? 0.3 : 1} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+
+          {editing && spine && (
+            <>
+              {/* editierbare Profilkurve: rechts das Original, links der Spiegel */}
+              <polyline points={poly(spine, -1)} fill="none" stroke="var(--color-bernstein)" strokeOpacity={0.25} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
+              <polyline points={poly(spine, 1)} fill="none" stroke="var(--color-bernstein)" strokeWidth={1.75} vectorEffect="non-scaling-stroke" />
+
+              {profile.mode === 'bezier' && (
+                <polyline
+                  points={poly(bezierPts, 1)}
+                  fill="none"
+                  stroke="var(--color-asche)"
+                  strokeOpacity={0.6}
+                  strokeDasharray="3 3"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+
+              {grip('end-bottom', bezierPts[0], { kind: 'end', which: 'bottom' }, { square: true })}
+              {grip('end-top', bezierPts[3], { kind: 'end', which: 'top' }, { square: true })}
+
+              {profile.mode === 'bezier' && (
+                <>
+                  {grip('h1', bezierPts[1], { kind: 'handle', which: 1 })}
+                  {grip('h2', bezierPts[2], { kind: 'handle', which: 2 })}
+                </>
+              )}
+              {profile.mode === 'spline' &&
+                splinePts.map((p, i) =>
+                  grip(`p${i}`, p, { kind: 'point', index: i }, { onDouble: removePoint(i) }),
+                )}
+            </>
+          )}
         </g>
       </svg>
       <figcaption className="mt-1.5 flex items-baseline justify-between font-mono text-[10px] text-asche">
-        <span>Seitenriss</span>
+        <span>
+          {profile.mode === 'preset' ? 'Seitenriss' : profile.mode === 'bezier' ? 'Bezier-Editor' : 'Spline-Editor'}
+        </span>
         <span>
           H {H.toFixed(0)} · Ø max {(2 * maxR).toFixed(0)} mm
         </span>
       </figcaption>
+      {editing && (
+        <p className="mt-1 font-mono text-[10px] leading-relaxed text-asche/80">
+          {profile.mode === 'bezier'
+            ? 'Griffe ziehen · Vierecke = Durchmesser unten/oben'
+            : 'Punkte ziehen · Klick auf Kurve: neuer Punkt · Doppelklick: löschen'}
+        </p>
+      )}
     </figure>
   )
 }

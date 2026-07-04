@@ -12,9 +12,32 @@
 
 export type ProfilePreset = 'zylinder' | 'konus' | 'tropfen' | 'glocke'
 
+/** 'preset' = eingebaute Formen; 'bezier'/'spline' = frei editierte Kurve */
+export type ProfileMode = 'preset' | 'bezier' | 'spline'
+
 export type SocketType = 'e14' | 'e27' | 'custom'
 
+/**
+ * Innere Kontrollpunkte der freien Bezier-Kurve (Modus 'bezier') in der
+ * (r, t)-Ebene, t = z/H normiert. Invariante 0 ≤ t1 ≤ t2 ≤ 1 hält die
+ * Höhenkomponente der Kurve monoton (das UI klemmt beim Ziehen entsprechend),
+ * damit der Radius eine eindeutige Funktion der Höhe bleibt.
+ */
+export interface BezierHandles {
+  r1Mm: number
+  t1: number
+  r2Mm: number
+  t2: number
+}
+
+/** Freier Stützpunkt des Profil-Splines (Modus 'spline'), t = z/H ∈ (0,1) */
+export interface SplinePoint {
+  rMm: number
+  t: number
+}
+
 export interface ProfileParams {
+  mode: ProfileMode
   preset: ProfilePreset
   /** Radius an der Unterkante (liegt beim Druck auf dem Bett), mm */
   bottomRadiusMm: number
@@ -22,6 +45,10 @@ export interface ProfileParams {
   topRadiusMm: number
   /** Ausprägung der Preset-Form (Bauch bzw. Glockenschwung), 0..1 */
   shapeAmount: number
+  /** Griffe der freien Bezier-Kurve – beim Moduswechsel frisch geseedet */
+  bezier: BezierHandles
+  /** Stützpunkte des freien Splines – beim Moduswechsel frisch geseedet */
+  spline: SplinePoint[]
 }
 
 export interface WaveParams {

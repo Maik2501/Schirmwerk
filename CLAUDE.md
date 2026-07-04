@@ -25,9 +25,10 @@ Tailwind v4 (Tokens in `src/index.css` unter `@theme`), Vitest.
   Hals-Position als Parameter (oben/unten)
 - Layerlinien-Optik als prozedurale Normal-Map in der Vorschau
 - MeshTransmissionMaterial als schaltbare „Schön“-Vorschau
-- Editierbare Bezier-Profilkurve (der „Riss“ wird Editor), weitere
-  Wellenformen (Dreieck, Sägezahn, Superformula), 3MF-Export,
+- Weitere Wellenformen (Dreieck, Sägezahn, Superformula), 3MF-Export,
   Druckzeit-/Materialschätzung, Galerie-/Turntable-Ansicht
+- Spline-Editor: Punkte per Tastatur verschiebbar machen (A11y),
+  Kurven-Presets speichern/laden
 
 ## Domänen-Konventionen
 
