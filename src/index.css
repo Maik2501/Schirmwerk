@@ -37,6 +37,13 @@ body {
   outline-offset: 2px;
 }
 
+/* Fokusring der Riss-Editorpunkte (SVG-Kreise) */
+svg circle:focus-visible {
+  outline: 2px solid var(--color-bernstein);
+  outline-offset: 3px;
+  border-radius: 50%;
+}
+
 ::selection {
   background: color-mix(in srgb, var(--color-bernstein) 35%, transparent);
 }

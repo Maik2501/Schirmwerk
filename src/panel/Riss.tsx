@@ -20,7 +20,15 @@
  * - Mit dem Druckbarkeits-Check färben sich hier später Zonen mit
  *   kritischem Überhang signalrot.
  */
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react'
 import { evalProfile } from '../geometry/profile'
 import {
   clamp,
@@ -241,6 +249,54 @@ export function Riss() {
     setProfile({ spline: profile.spline.filter((_, i) => i !== index) })
   }
 
+  // ---- Tastatur (A11y): Pfeile verschieben, Shift = fein, Entf löscht ----
+
+  /** Punkt um (Δr, Δz) in mm verschieben – gleiche Klemmen wie beim Drag. */
+  const nudge = (target: DragTarget, drMm: number, dzMm: number) => {
+    if (target.kind === 'end') {
+      const cur = target.which === 'bottom' ? profile.bottomRadiusMm : profile.topRadiusMm
+      const next = Math.max(1, cur + drMm)
+      setProfile(target.which === 'bottom' ? { bottomRadiusMm: next } : { topRadiusMm: next })
+    } else if (target.kind === 'handle') {
+      const b = { ...profile.bezier }
+      const dt = dzMm / H
+      if (target.which === 1) {
+        b.r1Mm = Math.max(1, b.r1Mm + drMm)
+        b.t1 = clamp(b.t1 + dt, 0, b.t2)
+      } else {
+        b.r2Mm = Math.max(1, b.r2Mm + drMm)
+        b.t2 = clamp(b.t2 + dt, b.t1, 1)
+      }
+      setProfile({ bezier: b })
+    } else {
+      const pts = profile.spline.map((p) => ({ ...p }))
+      const lo = (target.index === 0 ? 0 : pts[target.index - 1].t) + T_GAP
+      const hi = (target.index === pts.length - 1 ? 1 : pts[target.index + 1].t) - T_GAP
+      const p = pts[target.index]
+      pts[target.index] = { rMm: Math.max(1, p.rMm + drMm), t: clamp(p.t + dzMm / H, lo, hi) }
+      setProfile({ spline: pts })
+    }
+  }
+
+  const onGripKeyDown = (target: DragTarget) => (e: ReactKeyboardEvent<SVGElement>) => {
+    if ((e.key === 'Delete' || e.key === 'Backspace') && target.kind === 'point') {
+      e.preventDefault()
+      removePoint(target.index)()
+      return
+    }
+    const step = e.shiftKey ? 0.2 : 1
+    let dr = 0
+    let dz = 0
+    if (e.key === 'ArrowLeft') dr = -step
+    else if (e.key === 'ArrowRight') dr = step
+    else if (e.key === 'ArrowUp') dz = step
+    else if (e.key === 'ArrowDown') dz = -step
+    else return
+    if (target.kind === 'end' && dz !== 0) return // Endpunkte sind rein radial
+    e.preventDefault()
+    nudge(target, dr, dz)
+  }
+
   // ---- Darstellung ---------------------------------------------------------
 
   const topR = outer[outer.length - 1][0]
@@ -261,12 +317,15 @@ export function Riss() {
   ]
   const splinePts: [number, number][] = profile.spline.map((p) => [p.rMm, p.t * H])
 
-  /** Ziehbarer Punkt mit unsichtbarer, touch-tauglicher Trefferfläche. */
+  /**
+   * Ziehbarer Punkt mit unsichtbarer, touch-tauglicher Trefferfläche –
+   * per Tab fokussierbar und mit Pfeiltasten steuerbar (Shift = 0,2 mm).
+   */
   const grip = (
     key: string,
     [r, z]: [number, number],
     target: DragTarget,
-    opts?: { square?: boolean; onDouble?: () => void },
+    opts?: { square?: boolean; onDouble?: () => void; label?: string },
   ) => (
     <g key={key} className="cursor-grab active:cursor-grabbing">
       {opts?.square ? (
@@ -297,8 +356,16 @@ export function Riss() {
         r={hitR}
         fill="transparent"
         style={{ pointerEvents: 'all' }}
+        tabIndex={0}
+        role="button"
+        aria-label={
+          (opts?.label ?? 'Kurvenpunkt') +
+          ` – r ${r.toFixed(1)} mm, Höhe ${z.toFixed(1)} mm. Pfeiltasten verschieben, Shift = fein` +
+          (target.kind === 'point' ? ', Entf löscht' : '')
+        }
         onPointerDown={beginDrag(target)}
         onDoubleClick={opts?.onDouble}
+        onKeyDown={onGripKeyDown(target)}
       />
     </g>
   )
@@ -362,18 +429,23 @@ export function Riss() {
                 />
               )}
 
-              {grip('end-bottom', bezierPts[0], { kind: 'end', which: 'bottom' }, { square: true })}
-              {grip('end-top', bezierPts[3], { kind: 'end', which: 'top' }, { square: true })}
+              {grip('end-bottom', bezierPts[0], { kind: 'end', which: 'bottom' }, { square: true, label: 'Endpunkt unten (Durchmesser unten)' })}
+              {grip('end-top', bezierPts[3], { kind: 'end', which: 'top' }, { square: true, label: 'Endpunkt oben (Durchmesser oben)' })}
 
               {profile.mode === 'bezier' && (
                 <>
-                  {grip('h1', bezierPts[1], { kind: 'handle', which: 1 })}
-                  {grip('h2', bezierPts[2], { kind: 'handle', which: 2 })}
+                  {grip('h1', bezierPts[1], { kind: 'handle', which: 1 }, { label: 'Bezier-Griff 1' })}
+                  {grip('h2', bezierPts[2], { kind: 'handle', which: 2 }, { label: 'Bezier-Griff 2' })}
                 </>
               )}
               {profile.mode === 'spline' &&
                 splinePts.map((p, i) =>
-                  grip(`p${i}`, p, { kind: 'point', index: i }, { onDouble: removePoint(i) }),
+                  grip(
+                    `p${i}`,
+                    p,
+                    { kind: 'point', index: i },
+                    { onDouble: removePoint(i), label: `Spline-Punkt ${i + 1} von ${splinePts.length}` },
+                  ),
                 )}
             </>
           )}
@@ -406,6 +478,7 @@ export function Riss() {
           {profile.mode === 'bezier'
             ? 'Griffe ziehen · Vierecke = Durchmesser unten/oben'
             : 'Punkte ziehen · Klick auf Kurve: neuer Punkt · Doppelklick: löschen'}
+          {' · Tab + Pfeile: Tastatur (Shift = fein)'}
         </p>
       )}
     </figure>
