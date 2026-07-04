@@ -9,10 +9,15 @@ import { defaultShadeParams, EXPORT_RESOLUTION, PREVIEW_RESOLUTION } from '../ge
 import { seedBezierFromProfile, seedSplineFromProfile } from '../geometry/profile'
 import { PETG_TRANSLUCENT, type FilamentColor } from './filaments'
 
+/** Nutzungs-Aufbau: hängende Pendelleuchte oder stehende Nachttischlampe */
+export type Mounting = 'haengend' | 'stehend'
+
 interface StudioState {
   params: ShadeParams
   previewRes: Resolution
   exportRes: Resolution
+  /** Aufbau der Vorschau-Szene; 'stehend' zeigt Fuß statt Kabel */
+  mounting: Mounting
   /** Glühbirnen-Simulation an/aus */
   bulbOn: boolean
   /** Dimmer der Glühbirne, 0.1–1 */
@@ -30,6 +35,7 @@ interface StudioState {
   toggleBulb: () => void
   setBulbBrightness: (value: number) => void
   setShadeColor: (color: FilamentColor) => void
+  setMounting: (mounting: Mounting) => void
 }
 
 export const useStudio = create<StudioState>()((set) => ({
@@ -39,6 +45,7 @@ export const useStudio = create<StudioState>()((set) => ({
   bulbOn: true,
   bulbBrightness: 1,
   shadeColor: PETG_TRANSLUCENT[0],
+  mounting: 'haengend',
 
   setParams: (patch) => set((s) => ({ params: { ...s.params, ...patch } })),
   setProfile: (patch) =>
@@ -63,4 +70,11 @@ export const useStudio = create<StudioState>()((set) => ({
   toggleBulb: () => set((s) => ({ bulbOn: !s.bulbOn })),
   setBulbBrightness: (value) => set({ bulbBrightness: Math.min(1, Math.max(0.1, value)) }),
   setShadeColor: (color) => set({ shadeColor: color }),
+  setMounting: (mounting) =>
+    set((s) => ({
+      mounting,
+      // Hängend gibt es nur mit Kragen oben (die Lampe hängt an der Fassung)
+      params:
+        mounting === 'haengend' ? { ...s.params, neckPosition: 'top' } : s.params,
+    })),
 }))

@@ -26,6 +26,7 @@ export function defaultShadeParams(): ShadeParams {
 
   return {
     heightMm: 170,
+    neckPosition: 'top',
     profile,
     waves: {
       n1: 10,

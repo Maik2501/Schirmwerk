@@ -29,6 +29,7 @@ export function Bulb() {
   const bulbOn = useStudio((s) => s.bulbOn)
   const brightness = useStudio((s) => s.bulbBrightness)
   const params = useStudio((s) => s.params)
+  const mounting = useStudio((s) => s.mounting)
 
   const lightRef = useRef<THREE.PointLight>(null)
   const fillRef = useRef<THREE.PointLight>(null)
@@ -48,16 +49,21 @@ export function Bulb() {
   })
 
   const H = params.heightMm
-  // Birne (A60, Ø 60) hängt unterhalb des Halses; Koordinaten in Modell-Z (Höhe)
-  const bulbZ = H - params.neck.heightMm - 52
-  const capBottom = bulbZ + 26
-  const capTop = H + 2
+  // Birne (A60, Ø 60) sitzt am Kragen-Ende und ragt ins Innere;
+  // Koordinaten in Modell-Z (Höhe). Bei Kragen unten spiegelt sich alles.
+  const neckBottom = params.neckPosition === 'bottom'
+  const bulbZ = neckBottom ? params.neck.heightMm + 52 : H - params.neck.heightMm - 52
+  // Fülllicht Richtung offener Seite (dort ist der Schirm weit)
+  const fillZ = neckBottom ? bulbZ + 50 : bulbZ - 50
+  // Fassungskappe ragt aus dem Kragen (Pendel: nach oben; stehend: in den Fuß)
+  const capInner = neckBottom ? bulbZ - 26 : bulbZ + 26
+  const capOuter = neckBottom ? -2 : H + 2
   const cordTop = H + 220
 
   return (
     <group>
       <pointLight ref={lightRef} position={[0, 0, bulbZ]} color={WARM_LIGHT} decay={2} intensity={0} />
-      <pointLight ref={fillRef} position={[0, 0, bulbZ - 50]} color={WARM_LIGHT} decay={1} intensity={0} />
+      <pointLight ref={fillRef} position={[0, 0, fillZ]} color={WARM_LIGHT} decay={1} intensity={0} />
 
       {/* Birnenkugel */}
       <mesh position={[0, 0, bulbZ]}>
@@ -72,16 +78,18 @@ export function Bulb() {
       </mesh>
 
       {/* Fassungskappe (Zylinderachse ist lokal y → um x auf die z-Höhenachse drehen) */}
-      <mesh position={[0, 0, (capBottom + capTop) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[13, 14, capTop - capBottom, 32]} />
+      <mesh position={[0, 0, (capInner + capOuter) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[13, 14, Math.abs(capOuter - capInner), 32]} />
         <meshStandardMaterial color="#15120f" roughness={0.55} metalness={0.15} />
       </mesh>
 
-      {/* Kabel nach oben aus dem Bild */}
-      <mesh position={[0, 0, (capTop + cordTop) / 2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[1.8, 1.8, cordTop - capTop, 12]} />
-        <meshStandardMaterial color="#0d0b09" roughness={0.7} />
-      </mesh>
+      {/* Kabel nach oben aus dem Bild – nur die Pendelleuchte hängt daran */}
+      {mounting === 'haengend' && (
+        <mesh position={[0, 0, (H + 2 + cordTop) / 2]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[1.8, 1.8, cordTop - (H + 2), 12]} />
+          <meshStandardMaterial color="#0d0b09" roughness={0.7} />
+        </mesh>
+      )}
     </group>
   )
 }

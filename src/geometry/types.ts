@@ -10,7 +10,7 @@
  *   damit es pur testbar ist und in einem Web Worker laufen kann.
  */
 
-export type ProfilePreset = 'zylinder' | 'konus' | 'tropfen' | 'glocke'
+export type ProfilePreset = 'zylinder' | 'konus' | 'tropfen' | 'glocke' | 'saeule'
 
 /** 'preset' = eingebaute Formen; 'bezier'/'spline' = frei editierte Kurve */
 export type ProfileMode = 'preset' | 'bezier' | 'spline'
@@ -87,12 +87,23 @@ export interface NeckParams {
   blendMm: number
 }
 
+/**
+ * Lage des Fassungskragens im DRUCKRAUM (z = 0 ist immer das Bett):
+ * - 'top':    Kragen oben, weite Öffnung am Bett – Standard, beste Haftung.
+ *             Hängend genutzt wie gedruckt; stehend genutzt kopfüber.
+ * - 'bottom': Kragen direkt am Bett (kleine Auflagefläche!), die Form
+ *             öffnet nach oben und endet dort frei gewellt – für stehende
+ *             Lampen, deren Oberkante organisch auslaufen soll.
+ */
+export type NeckPosition = 'top' | 'bottom'
+
 export interface ShadeParams {
   /** Gesamthöhe des Schirms inklusive Hals, mm */
   heightMm: number
   profile: ProfileParams
   waves: WaveParams
   neck: NeckParams
+  neckPosition: NeckPosition
   /**
    * Fuß-Blend: Höhe über dem Bett, auf der die Wellen von 0 einlaufen, mm.
    * Runde erste Schichten haften besser und geben einen sauberen Rand

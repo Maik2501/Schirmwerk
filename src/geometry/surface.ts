@@ -61,7 +61,18 @@ export function radiusAt(params: ShadeParams, theta: number, z: number): number 
     a1 * Math.sin(n1 * (theta - tau) + phase1Rad) +
     a2 * Math.sin(n2 * (theta + tau) + phase2Rad)
 
-  // Fuß-Blend: Wellen laufen über footBlendMm weich ein
+  if (params.neckPosition === 'bottom') {
+    // Kragen am Bett: [0, neckH] zylindrisch, darüber Blendzone nach oben.
+    // Der Wellen-Auslauf sichert hier die OBERE, frei endende Kante –
+    // footBlendMm = 0 lässt sie voll gewellt auslaufen (Referenz-Look).
+    const fade = params.footBlendMm > 0 ? 1 - smoothstep(H - params.footBlendMm, H, z) : 1
+    const body = evalProfile(params.profile, z / H) * (1 + fade * wave)
+    const neckEnd = params.neck.heightMm
+    const s = 1 - smoothstep(neckEnd, neckEnd + params.neck.blendMm, z)
+    return body * (1 - s) + neckRadiusMm(params.neck) * s
+  }
+
+  // Kragen oben (Standard): Wellen laufen am Bett über footBlendMm ein
   const foot = smoothstep(0, params.footBlendMm, z)
   const body = evalProfile(params.profile, z / H) * (1 + foot * wave)
 

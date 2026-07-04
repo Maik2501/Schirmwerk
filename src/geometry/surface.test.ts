@@ -22,6 +22,7 @@ const FREI: Pick<ProfileParams, 'mode' | 'bezier' | 'spline'> = {
 function bareParams(overrides?: Partial<ShadeParams['waves']>): ShadeParams {
   return {
     heightMm: 100,
+    neckPosition: 'top',
     profile: { ...FREI, preset: 'zylinder', bottomRadiusMm: 50, topRadiusMm: 50, shapeAmount: 0 },
     waves: {
       n1: 6, a1: 0.2, n2: 12, a2: 0, twistDeg: 0, phase1Rad: 0, phase2Rad: 0,
@@ -127,6 +128,40 @@ describe('Überhang-Winkel', () => {
     params.profile = { ...FREI, preset: 'konus', bottomRadiusMm: 70, topRadiusMm: 20, shapeAmount: 0 }
     params.neck = { socket: 'custom', holeDiameterMm: 40, extraClearanceMm: 0, heightMm: 0, blendMm: 0 }
     expect(overhangAngleDeg(params, 0, 25)).toBe(0)
+  })
+})
+
+describe('Kragen unten (neckPosition bottom)', () => {
+  function standingParams(): ShadeParams {
+    const params = defaultShadeParams()
+    params.neckPosition = 'bottom'
+    params.footBlendMm = 0
+    return params
+  }
+
+  it('ist im Kragen am Bett konstant rund und trifft den Halsradius', () => {
+    const params = standingParams()
+    const zKragen = params.neck.heightMm / 2
+    const samples = Array.from({ length: 64 }, (_, i) => radiusAt(params, (i / 64) * TWO_PI, zKragen))
+    expect(Math.max(...samples) - Math.min(...samples)).toBeLessThan(1e-9)
+    expect(samples[0]).toBeCloseTo(neckRadiusMm(params.neck), 6)
+  })
+
+  it('endet oben frei gewellt (footBlendMm = 0)', () => {
+    const params = standingParams()
+    const zTop = params.heightMm * (1 - 1e-9)
+    const samples = Array.from({ length: 128 }, (_, i) => radiusAt(params, (i / 128) * TWO_PI, zTop))
+    const spanne = Math.max(...samples) - Math.min(...samples)
+    // volle Wellenamplitude: ±(a1+a2)·P ≈ ±19,5 % – deutlich, nicht rund
+    expect(spanne).toBeGreaterThan(5)
+  })
+
+  it('läuft oben rund aus, wenn ein Wellen-Auslauf gesetzt ist', () => {
+    const params = standingParams()
+    params.footBlendMm = 10
+    const zTop = params.heightMm * (1 - 1e-9)
+    const samples = Array.from({ length: 64 }, (_, i) => radiusAt(params, (i / 64) * TWO_PI, zTop))
+    expect(Math.max(...samples) - Math.min(...samples)).toBeLessThan(1e-9)
   })
 })
 

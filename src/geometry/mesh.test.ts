@@ -12,6 +12,7 @@ import type { MeshData, ShadeParams } from './types'
 function cylinderParams(): ShadeParams {
   return {
     heightMm: 100,
+    neckPosition: 'top',
     profile: {
       mode: 'preset',
       preset: 'zylinder',
@@ -102,6 +103,27 @@ describe('buildShadeMesh – Wasserdichtheit & Orientierung', () => {
       expect(len).toBeGreaterThan(0.999)
       expect(len).toBeLessThan(1.001)
     }
+  })
+})
+
+describe('Kragen unten (neckPosition bottom)', () => {
+  const res = { thetaSegments: 64, zSegments: 40 }
+
+  it('bleibt ein geschlossenes, korrekt orientiertes 2-Mannigfaltiges Netz', () => {
+    const params = defaultShadeParams()
+    params.neckPosition = 'bottom'
+    params.footBlendMm = 0
+    const mesh = buildShadeMesh(params, res, { caps: true })
+    const { undirected, duplicateDirected } = edgeStats(mesh)
+    for (const count of undirected.values()) expect(count).toBe(2)
+    expect(duplicateDirected).toBe(false)
+    expect(signedVolume(mesh)).toBeGreaterThan(0)
+  })
+
+  it('hält r > 0 auch mit Kragen am Bett', () => {
+    const params = defaultShadeParams()
+    params.neckPosition = 'bottom'
+    expect(sampleMinRadius(params, { thetaSegments: 128, zSegments: 128 })).toBeGreaterThan(0)
   })
 })
 

@@ -21,6 +21,12 @@ const PROFILE_PRESETS: { id: ProfilePreset; label: string }[] = [
   { id: 'konus', label: 'Konus' },
   { id: 'tropfen', label: 'Tropfen' },
   { id: 'glocke', label: 'Glocke' },
+  { id: 'saeule', label: 'Säule' },
+]
+
+const MOUNTINGS: { id: 'haengend' | 'stehend'; label: string }[] = [
+  { id: 'haengend', label: 'Hängend (Pendel)' },
+  { id: 'stehend', label: 'Stehend (Fuß)' },
 ]
 
 const CUSTOM_MODES: { id: Exclude<ProfileMode, 'preset'>; label: string }[] = [
@@ -39,8 +45,18 @@ export function Panel() {
   const previewRes = useStudio((s) => s.previewRes)
   const exportRes = useStudio((s) => s.exportRes)
   const shadeColor = useStudio((s) => s.shadeColor)
-  const { setParams, setProfile, setProfileMode, setWaves, setNeck, setPreviewRes, setExportRes, setShadeColor } =
-    useStudio()
+  const mounting = useStudio((s) => s.mounting)
+  const {
+    setParams,
+    setProfile,
+    setProfileMode,
+    setWaves,
+    setNeck,
+    setPreviewRes,
+    setExportRes,
+    setShadeColor,
+    setMounting,
+  } = useStudio()
 
   const { profile, waves, neck } = params
   const editing = profile.mode !== 'preset'
@@ -75,10 +91,67 @@ export function Panel() {
     <div className="flex h-full flex-col">
       <Riss />
       <div className="flex-1 space-y-3 overflow-y-auto p-3">
+        <Group title="Aufbau">
+          <div className="grid grid-cols-2 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+            {MOUNTINGS.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                aria-pressed={mounting === m.id}
+                onClick={() => setMounting(m.id)}
+                className={
+                  'rounded px-1 py-1 text-[11px] transition-colors ' +
+                  (mounting === m.id ? 'bg-rauch text-bernstein' : 'text-asche hover:text-porzellan')
+                }
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
+          {mounting === 'stehend' && (
+            <div>
+              <span className="mb-1.5 block text-xs text-asche">Druckrichtung</span>
+              <div className="grid grid-cols-2 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+                <button
+                  type="button"
+                  aria-pressed={params.neckPosition === 'top'}
+                  onClick={() => setParams({ neckPosition: 'top' })}
+                  className={
+                    'rounded px-1 py-1 text-[11px] transition-colors ' +
+                    (params.neckPosition === 'top'
+                      ? 'bg-rauch text-bernstein'
+                      : 'text-asche hover:text-porzellan')
+                  }
+                >
+                  Öffnung am Bett
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={params.neckPosition === 'bottom'}
+                  onClick={() => setParams({ neckPosition: 'bottom' })}
+                  className={
+                    'rounded px-1 py-1 text-[11px] transition-colors ' +
+                    (params.neckPosition === 'bottom'
+                      ? 'bg-rauch text-bernstein'
+                      : 'text-asche hover:text-porzellan')
+                  }
+                >
+                  Kragen am Bett
+                </button>
+              </div>
+              <p className="mt-1.5 text-[10px] leading-relaxed text-asche">
+                {params.neckPosition === 'top'
+                  ? 'Kopfüber gedruckt (beste Haftung), zum Nutzen umgedreht.'
+                  : 'Direkt in Nutzlage gedruckt – kleine Auflagefläche, Brim empfohlen. Die Oberkante darf frei auslaufen.'}
+              </p>
+            </div>
+          )}
+        </Group>
+
         <Group title="Form">
           <div>
             <span className="mb-1.5 block text-xs text-asche">Grundprofil</span>
-            <div className="grid grid-cols-4 gap-1 rounded-md border border-white/10 bg-kohle p-1">
+            <div className="grid grid-cols-5 gap-1 rounded-md border border-white/10 bg-kohle p-1">
               {PROFILE_PRESETS.map((p) => (
                 <button
                   key={p.id}
@@ -204,7 +277,7 @@ export function Panel() {
             onChange={(v) => setWaves({ a2: v / 100 })}
           />
           <SliderInput
-            label="Wellen-Auslauf unten"
+            label={params.neckPosition === 'bottom' ? 'Wellen-Auslauf oben' : 'Wellen-Auslauf unten'}
             value={params.footBlendMm}
             min={0}
             max={30}

@@ -13,7 +13,8 @@ import type { Resolution, ShadeParams } from '../geometry/types'
 /** Dateiname aus Form und Höhe, z. B. schirmwerk-tropfen-h170mm.stl */
 export function stlFileName(params: ShadeParams): string {
   const form = params.profile.mode === 'preset' ? params.profile.preset : params.profile.mode
-  return `schirmwerk-${form}-h${Math.round(params.heightMm)}mm.stl`
+  const variante = params.neckPosition === 'bottom' ? '-kragen-unten' : ''
+  return `schirmwerk-${form}-h${Math.round(params.heightMm)}mm${variante}.stl`
 }
 
 /** Baut das STL und startet den Download. Liefert die Dateigröße in Byte. */

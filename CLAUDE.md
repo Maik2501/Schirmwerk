@@ -20,10 +20,9 @@ Tailwind v4 (Tokens in `src/index.css` unter `@theme`), Vitest.
 
 ## Backlog (nach MVP, gemeinsam priorisieren)
 
-- **Nachttischlampen-Variante** (Nutzerwunsch 03.07.2026, Referenzbilder
-  04.07.: organisch gewellte stehende Schirme): Fassung unten, **einfacher
-  Fuß** (flacher Sockel/Puck, kein Tripod) – Druck- und Nutzungsorientierung
-  entkoppeln, Hals-Position als Parameter (oben/unten)
+- **Druckbarer Fuß** für die stehende Variante (Folge von Feature 7):
+  parametrischer Sockel als zweites STL (normaler Druck) mit
+  E14/E27-Fassungsaufnahme, Kabelkanal und Auflagerand für den Kragen
 - Layerlinien-Optik als prozedurale Normal-Map in der Vorschau
 - MeshTransmissionMaterial als schaltbare „Schön“-Vorschau
 - Weitere Wellenformen (Dreieck, Sägezahn, Superformula), 3MF-Export,

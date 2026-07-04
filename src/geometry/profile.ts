@@ -67,6 +67,12 @@ export function profileControlRadii(profile: ProfileParams): [number, number, nu
       const shoulder = r3 * (1 + 0.35 * s)
       return [r0, skirt, shoulder, r3]
     }
+    case 'saeule': {
+      // Säule (Nachttischlampen-Referenz): fast zylindrische, sanft
+      // tonnige Silhouette – shapeAmount skaliert die milde Wölbung.
+      const bulge = 1 + 0.18 * s
+      return [r0, lerp(r0, r3, 1 / 3) * bulge, lerp(r0, r3, 2 / 3) * bulge, r3]
+    }
   }
 }
 
